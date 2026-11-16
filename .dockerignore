@@ -1,0 +1,9 @@
+instances
+tests
+docs
+.git
+**/__pycache__
+*.pyc
+vendor_keys
+vendor_private*
+.env

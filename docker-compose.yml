@@ -1,0 +1,23 @@
+# Asset Master - run with:  docker compose up -d --build
+# Then open http://SERVER-IP:5222  (first start: see the setup code with  docker compose logs assetmaster)
+services:
+  assetmaster:
+    build: .
+    image: assetmaster:latest
+    container_name: assetmaster
+    restart: unless-stopped
+    ports:
+      - "${AM_PORT:-5222}:5222"
+    environment:
+      AM_PORT: "5222"
+      AM_HOST: "0.0.0.0"
+      AM_INSTANCE: "/data"
+      # Put these in a .env file next to this file if you need them:
+      AM_HTTPS: "${AM_HTTPS:-false}"                # true when users reach the app over https
+      AM_TRUST_PROXY: "${AM_TRUST_PROXY:-false}"    # true when a reverse proxy (nginx/caddy/traefik) sits in front
+      AM_ALLOWED_HOSTS: "${AM_ALLOWED_HOSTS:-}"     # e.g. assets.mycompany.com  (comma separated, empty = any)
+    volumes:
+      - am_data:/data                               # database, uploads, backups, secrets, config
+
+volumes:
+  am_data:
