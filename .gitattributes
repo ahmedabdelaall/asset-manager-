@@ -1,0 +1,6 @@
+# Keep Linux line endings in the repository and in checkouts (the app runs in a Linux Docker container).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary
+*.xlsx binary

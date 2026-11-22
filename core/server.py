@@ -4,6 +4,7 @@ import os
 import re
 import json
 import time
+import shutil
 import logging
 import threading
 import traceback
@@ -11,7 +12,8 @@ import urllib.parse
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import VERSION, audit, rbac, company, licensing, security
+from . import VERSION, audit, rbac, company, licensing, security, backup, access, notify
+from . import health as health_checks          # not "health": that name is the /api/health route below
 from .auth import Auth
 from .backup import BackupScheduler
 from .config import Instance
@@ -29,8 +31,9 @@ MIME = {".html": "text/html; charset=utf-8", ".js": "application/javascript; cha
 
 
 class Raw:
-    def __init__(self, body, ctype, status=200, headers=None):
-        self.body, self.ctype, self.status, self.headers = body, ctype, status, headers or {}
+    """A non-JSON response. Pass `path` instead of `body` to stream a (possibly large) file from disk."""
+    def __init__(self, body, ctype, status=200, headers=None, path=None):
+        self.body, self.ctype, self.status, self.headers, self.path = body, ctype, status, headers or {}, path
 
 
 # ------------------------------------------------------------------ routing
@@ -81,12 +84,15 @@ class App:
         self.inst = Instance(instance_path)
         self.db = Database(self.inst.db_path, MIGRATIONS, self.inst.backups_dir)
         self.db.migrate()
+        self.db.execute("PRAGMA optimize")          # refresh the query planner's statistics where they are stale (cheap)
         rbac.sync(self.db)
         self.auth = Auth(self.db, self.inst)
         self.license = licensing.Manager(self.db, self.inst)
         self.setup_code = None
         self.ensure_setup_code()
-        self.setup_limiter = __import__("core.auth", fromlist=["IpLimiter"]).IpLimiter()
+        from .auth import IpLimiter
+        self.setup_limiter = IpLimiter()
+        self.access_limiter = IpLimiter(window=3600, maximum=5)     # public "request access" form: 5 per IP per hour
 
     def needs_setup(self):
         return self.db.one("SELECT COUNT(*) c FROM users")["c"] == 0
@@ -143,6 +149,7 @@ def make_handler(app):
     class H(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
         server_version = "AssetMaster"
+        timeout = 60          # seconds of silence before an idle/slow connection is dropped (slow-client protection)
 
         def log_message(self, fmt, *a):
             pass
@@ -164,6 +171,9 @@ def make_handler(app):
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("X-Frame-Options", "DENY")
             self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+            self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+            self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
             self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
                              "script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
             if app.inst.config["https"]:
@@ -179,6 +189,20 @@ def make_handler(app):
             self.end_headers()
             if self.command != "HEAD":
                 self.wfile.write(body)
+
+        def _send_file(self, path, ctype, headers):
+            size = os.path.getsize(path)
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(size))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+            for k, v in headers.items():
+                self.send_header(k, v)
+            self.end_headers()
+            if self.command != "HEAD":
+                with open(path, "rb") as f:
+                    shutil.copyfileobj(f, self.wfile, 1 << 20)
 
         def _json(self, status, data, **kw):
             self._send(status, json.dumps(data, ensure_ascii=False), "application/json; charset=utf-8",
@@ -256,6 +280,8 @@ def make_handler(app):
                 ctx = Ctx(app, self, method, path, query, params, body, user, session, token, self._ip(), self.headers.get("User-Agent", ""))
                 result = matched["fn"](ctx)
                 if isinstance(result, Raw):
+                    if result.path:
+                        return self._send_file(result.path, result.ctype, result.headers)
                     return self._send(result.status, result.body, result.ctype, headers=result.headers)
                 status = 200
                 if isinstance(result, tuple):
@@ -315,6 +341,9 @@ def branding(ctx):
     b = company.branding(ctx.db)
     b["needs_setup"] = ctx.app.needs_setup()
     b["version"] = VERSION
+    b["access_requests"] = not b["needs_setup"] and access.enabled(ctx.db, ctx.app.inst)
+    if b["access_requests"]:
+        b["access_domains"] = access.allowed_domains(ctx.db, ctx.app.inst)
     return b
 
 
@@ -345,8 +374,10 @@ def setup(ctx):
         app.setup_limiter.fail(ctx.ip)
         raise ApiError(403, "bad_setup_code", "The setup code is not correct")
     super_role = ctx.db.one("SELECT id FROM roles WHERE key='super_admin'")
+    domains = access.parse_domains(d.get("access_allowed_domains"))
     with ctx.db.tx():
         company.create(ctx.db, d)
+        notify.set_value(ctx.db, "access_allowed_domains", domains)
         uid, _ = app.auth.create_user(None, {"username": d.get("username"), "full_name": d.get("full_name"), "email": d.get("email"),
                                              "role_id": super_role["id"], "password": d.get("password") or ""}, None, ctx.ip)
         ctx.db.execute("UPDATE users SET must_change_password=0 WHERE id=?", (uid,))
@@ -360,7 +391,7 @@ def _session_payload(ctx, user, csrf):
     st = ctx.app.license.status()
     return {"user": ctx.app.auth.public_user(user), "csrf": csrf,
             "license": {"state": st["state"], "locked": st["locked"], "days_left": st["days_left"],
-                        "expires_at": (st["license"] or {}).get("expires_at")}}
+                        "expires_at": (st["license"] or {}).get("expires_at"), "disabled": st["state"] == "disabled"}}
 
 
 @route("POST", "/api/auth/login", public=True, csrf=False, lic=False)
@@ -398,7 +429,8 @@ def prefs(ctx):
     d = ctx.json()
     lang = choice(d, "lang", ("en", "ar"), ctx.user["lang"] or "en")
     theme = choice(d, "theme", ("light", "dark", "system"), ctx.user["theme"] or "light")
-    ctx.db.execute("UPDATE users SET lang=?, theme=? WHERE id=?", (lang, theme, ctx.user["id"]))
+    alerts = (1 if d["email_alerts"] else 0) if isinstance(d.get("email_alerts"), bool) else ctx.user["email_alerts"]
+    ctx.db.execute("UPDATE users SET lang=?, theme=?, email_alerts=? WHERE id=?", (lang, theme, alerts, ctx.user["id"]))
     return {}
 
 
@@ -408,16 +440,22 @@ def dashboard(ctx):
     db = ctx.db
     st = ctx.app.license.status()
     users = db.one("SELECT COUNT(*) total, SUM(is_active) active FROM users")
-    last_backup = (db.list_backups() or [None])[0]
+    last_backup = ([b for b in backup.list_all(ctx.app.inst) if b["kind"] == "full"] or [None])[0]
     out = {"version": VERSION, "schema": db.schema_version(),
            "users": {"total": users["total"], "active": users["active"] or 0},
            "roles": db.one("SELECT COUNT(*) c FROM roles")["c"],
            "license": {"state": st["state"], "days_left": st["days_left"],
                        "expires_at": (st["license"] or {}).get("expires_at"),
-                       "max_users": (st["license"] or {}).get("max_users")},
+                       "max_users": (st["license"] or {}).get("max_users"), "disabled": st["state"] == "disabled"},
            "last_backup": last_backup}
     if rbac.user_has(db, ctx.user, "audit.view"):
         out["recent"] = audit.list_entries(db, 1, 8)["entries"]
+    if rbac.user_has(db, ctx.user, "assets.view"):
+        from . import inventory
+        out["assets"] = inventory.summary(db)
+    if rbac.user_has(db, ctx.user, "maintenance.view"):
+        out["maintenance"] = {"open": db.one("SELECT COUNT(*) c FROM maintenance WHERE status='open'")["c"],
+                              "scheduled": db.one("SELECT COUNT(*) c FROM maintenance WHERE status='scheduled'")["c"]}
     return out
 
 
@@ -449,6 +487,30 @@ def users_active(ctx):
 @route("POST", "/api/users/<int:id>/reset-password", perm="users.manage")
 def users_reset(ctx):
     return {"temp_password": ctx.app.auth.admin_reset_password(ctx.user, int(ctx.params["id"]), ctx.ip)}
+
+
+# ---------------------------------------------------------------- request access
+@route("POST", "/api/access-requests", public=True, csrf=False, lic=False)
+def access_submit(ctx):
+    if ctx.app.needs_setup():
+        raise ApiError(409, "setup_required", "The system is not set up yet")
+    access.submit(ctx)
+    return 201, {"received": True}         # same answer whether or not the e-mail already has a request or account
+
+
+@route("GET", "/api/access-requests", perm="users.manage")
+def access_list(ctx):
+    return access.list_requests(ctx.db, ctx.query.get("status", "pending"))
+
+
+@route("POST", "/api/access-requests/<int:id>/approve", perm="users.manage")
+def access_approve(ctx):
+    return access.approve(ctx, int(ctx.params["id"]))
+
+
+@route("POST", "/api/access-requests/<int:id>/reject", perm="users.manage")
+def access_reject(ctx):
+    return access.reject(ctx, int(ctx.params["id"]))
 
 
 # ---------------------------------------------------------------- roles
@@ -587,8 +649,14 @@ def license_get(ctx):
     return out
 
 
+def _license_on(ctx):
+    if not licensing.enabled(ctx.app.inst):
+        raise ApiError(409, "license_disabled", "Licensing is switched off on this server")
+
+
 @route("POST", "/api/license/activate", perm="license.manage", lic=False)
 def license_activate(ctx):
+    _license_on(ctx)
     d = ctx.json()
     try:
         payload = licensing.activate(ctx.db, ctx.app.inst, ctx.app.license, d.get("license") or "", ctx.user["username"])
@@ -601,6 +669,7 @@ def license_activate(ctx):
 
 @route("POST", "/api/license/revocations", perm="license.manage", lic=False)
 def license_revocations(ctx):
+    _license_on(ctx)
     try:
         p = licensing.apply_revocations(ctx.db, ctx.app.inst, ctx.app.license, ctx.json().get("list") or "", ctx.user["username"])
     except licensing.LicenseError as e:
@@ -634,15 +703,45 @@ def audit_verify(ctx):
 
 @route("GET", "/api/backups", perm="backup.view")
 def backups_list(ctx):
-    return {"backups": ctx.db.list_backups(), "dir": ctx.app.inst.backups_dir, "keep": ctx.app.inst.config["backup_keep"]}
+    return {"backups": backup.list_all(ctx.app.inst), "dir": ctx.app.inst.backups_dir, "keep": ctx.app.inst.config["backup_keep"]}
 
 
 @route("POST", "/api/backups", perm="backup.manage")
 def backups_create(ctx):
-    p = ctx.db.backup("manual")
-    ctx.db.prune_backups(int(ctx.app.inst.config["backup_keep"]))
-    ctx.audit("backup.create", "backup", os.path.basename(p))
+    p = backup.full_backup(ctx.db, ctx.app.inst, "manual")
+    backup.prune(ctx.app.inst, int(ctx.app.inst.config["backup_keep"]))
+    ctx.audit("backup.create", "backup", os.path.basename(p), {"size": os.path.getsize(p)})
     return {"file": os.path.basename(p)}
+
+
+def _backup_path(ctx):
+    try:
+        return backup.path_of(ctx.app.inst, ctx.params["name"])
+    except backup.BackupError:
+        raise ApiError(404, "backup_not_found", "Backup not found")
+
+
+@route("POST", r"/api/backups/(?P<name>[A-Za-z0-9_.\-]+)/verify", perm="backup.manage")
+def backups_verify(ctx):
+    r = backup.verify(_backup_path(ctx))
+    ctx.audit("backup.verify", "backup", ctx.params["name"], {"ok": r["ok"], "problems": r["problems"][:5]})
+    return {"result": r}
+
+
+@route("GET", r"/api/backups/(?P<name>[A-Za-z0-9_.\-]+)/download", perm="backup.manage")
+def backups_download(ctx):
+    p = _backup_path(ctx)
+    ctx.audit("backup.download", "backup", ctx.params["name"], {"size": os.path.getsize(p)})
+    ctype = "application/zip" if p.endswith(".zip") else "application/octet-stream"
+    return Raw(None, ctype, path=p, headers={"Content-Disposition": 'attachment; filename="%s"' % ctx.params["name"], "Cache-Control": "no-store"})
+
+
+@route("GET", "/api/system/health", perm="backup.view")
+def system_health(ctx):
+    return health_checks.run(ctx.db, ctx.app.inst, MIGRATIONS, deep=ctx.query.get("deep") == "1")
+
+
+from . import api_inventory  # noqa: E402,F401  (registers the Phase 2 routes)
 
 
 # ================================================================== run
@@ -657,7 +756,11 @@ def serve(instance_path):
     cfg = app.inst.config
     httpd = Server((cfg["host"], int(cfg["port"])), make_handler(app))
     BackupScheduler(app.db, app.inst).start()
-    if cfg.get("license_server_url"):
+    from .notify import DigestScheduler
+    DigestScheduler(app.db, app.inst).start()
+    if not licensing.enabled(app.inst):
+        print("Licensing is switched off (AM_LICENSE=off): no licence needed, no user limit.", flush=True)
+    elif cfg.get("license_server_url"):
         def loop():
             while True:
                 licensing.refresh_online(app.db, app.inst, app.license)

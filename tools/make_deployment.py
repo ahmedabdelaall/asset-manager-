@@ -28,6 +28,8 @@ def main():
     p.add_argument("--port", type=int, default=5222)
     p.add_argument("--out", required=True)
     p.add_argument("--public-key", help="path to YOUR vendor public key (vendor_public.pem) to bake into this deployment")
+    p.add_argument("--license", choices=("on", "off"), default="on", help="off = no licence needed (no lock, no user limit)")
+    p.add_argument("--tz", default="Africa/Cairo", help="company time zone, e.g. Africa/Cairo or Asia/Riyadh")
     a = p.parse_args()
     if not re.fullmatch(r"[a-z0-9][a-z0-9\-]{1,30}", a.name):
         sys.exit("--name must be lowercase letters, digits or dashes")
@@ -50,7 +52,7 @@ def main():
     os.makedirs(keys, exist_ok=True)
     if a.public_key:
         shutil.copy2(a.public_key, os.path.join(keys, "vendor_public.pem"))
-    elif not os.path.exists(os.path.join(keys, "vendor_public.pem")):
+    elif a.license == "on" and not os.path.exists(os.path.join(keys, "vendor_public.pem")):
         print("WARNING: no vendor public key included - licences cannot be verified until you add core/keys/vendor_public.pem")
     with open(os.path.join(ROOT, "docker-compose.yml"), "r", encoding="utf-8") as f:
         comp = f.read()
@@ -58,7 +60,7 @@ def main():
     with open(os.path.join(dest, "docker-compose.yml"), "w", encoding="utf-8") as f:
         f.write(comp)
     with open(os.path.join(dest, ".env"), "w", encoding="utf-8") as f:
-        f.write("AM_PORT=%d\n" % a.port)
+        f.write("AM_PORT=%d\nTZ=%s\nAM_LICENSE=%s\n" % (a.port, a.tz, a.license))
     with open(os.path.join(dest, "RELEASE.txt"), "w", encoding="utf-8") as f:
         f.write("Generated from Asset Master %s for '%s'.\nStart: docker compose up -d --build\nOpen: http://SERVER:%d\n" % (VERSION, a.name, a.port))
     print("Deployment created:", dest, "(from master v%s)" % VERSION)

@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<title>Asset Master — User Guide</title>
+<link rel="stylesheet" href="guide.css">
+</head>
+<body>
+
+<section class="cover">
+  <div>
+    <div class="logo">A</div>
+    <h1>Asset Master<br>User Guide</h1>
+    <div class="lead">Everything the system does — every page, every button, and step-by-step instructions for the everyday work of managing company assets.</div>
+  </div>
+  <div class="meta"><span>Version 0.8.0</span><span>For administrators, asset managers, HR and everyone who uses the system</span></div>
+</section>
+
+<h1 class="ch" style="page-break-before:avoid">Contents</h1>
+<ol class="toc">
+  <li><b>1</b> What the system is (in 2 minutes)</li>
+  <li><b>2</b> First start, licence and signing in</li>
+  <li><b>3</b> The screen: menu, top bar, alerts</li>
+  <li><b>4</b> Dashboard</li>
+  <li><b>5</b> Assets</li>
+  <li><b>6</b> One asset: the detail window</li>
+  <li><b>7</b> Handing over and taking back (assignments)</li>
+  <li><b>8</b> Receipts</li>
+  <li><b>9</b> Employees and departments</li>
+  <li><b>10</b> Categories and custom fields</li>
+  <li><b>11</b> Maintenance</li>
+  <li><b>12</b> Asset requests (approvals)</li>
+  <li><b>13</b> Reports</li>
+  <li><b>14</b> QR labels and scanning</li>
+  <li><b>15</b> Excel import and export</li>
+  <li><b>16</b> Documents</li>
+  <li><b>17</b> Users</li>
+  <li><b>18</b> Roles and permissions</li>
+  <li><b>19</b> Company, branding, alerts and e-mail</li>
+  <li><b>20</b> Licence</li>
+  <li><b>21</b> Audit log</li>
+  <li><b>22</b> Backups and system health</li>
+  <li><b>23</b> My account</li>
+  <li><b>24</b> Everyday recipes</li>
+  <li><b>25</b> Rules the system enforces &amp; messages</li>
+  <li><b>26</b> For the server administrator</li>
+  <li><b>27</b> Glossary</li>
+</ol>
+
+<div class="box tip" style="margin-top:8mm"><b>How to read this guide</b>Button and field names appear like this: <span class="ui">Add asset</span>. Every chapter starts with what the page is for, then lists every button and what it does, then gives step-by-step instructions. You only see the pages and buttons your role allows — if a button described here is missing for you, your role does not include that permission (chapter 18).</div>
+
+<!-- ============================================================ 1 -->
+<h1 class="ch"><span class="n">1</span>What the system is (in 2 minutes)</h1>
+<p>Asset Master keeps track of <b>everything your company owns</b> — laptops, phones, monitors, vehicles, furniture — and answers three questions at any moment: <b>what do we have, where is it, and who has it?</b></p>
+<h2>The main ideas</h2>
+<table>
+<tr><th>Idea</th><th>What it means</th></tr>
+<tr><td><b>Asset</b></td><td>One physical thing the company owns (one laptop, one car). Each asset has a unique <b>asset tag</b> such as <span class="mono">LAP-00001</span>.</td></tr>
+<tr><td><b>Category</b></td><td>A type of asset (Laptops, Vehicles…). The category decides the tag prefix (<span class="mono">LAP</span>), the extra fields you record (e.g. RAM, plate number) and the useful life for depreciation.</td></tr>
+<tr><td><b>Employee</b></td><td>A person who can receive assets. Employees do <b>not</b> need a login.</td></tr>
+<tr><td><b>User</b></td><td>A person who signs in to the system. What they can do depends on their <b>role</b>.</td></tr>
+<tr><td><b>Assignment (custody)</b></td><td>Handing an asset to an employee. It stays open until the asset is returned. Every handover and return gets a numbered <b>receipt</b>.</td></tr>
+<tr><td><b>Status</b></td><td><span class="chip c-good">In stock</span> available · <span class="chip c-info">Assigned</span> with an employee · <span class="chip c-warn">In maintenance</span> being repaired · <span class="chip c-mut">Retired</span> no longer used · <span class="chip c-bad">Lost</span> missing.</td></tr>
+<tr><td><b>Condition</b></td><td>New, Good, Fair, Poor, Damaged — recorded on every handover and return.</td></tr>
+<tr><td><b>Audit log</b></td><td>A permanent, tamper-evident record of every important action: who did what, and when.</td></tr>
+</table>
+<h2>The life of an asset</h2>
+<p><b>Register</b> it (In stock) → <b>assign</b> it to an employee (Assigned, handover receipt printed and signed) → the employee <b>returns</b> it (return receipt) → back <b>In stock</b>, or <b>In maintenance</b> for repair, or <b>Retired</b>/<b>Lost</b> at the end. Every step is recorded on the asset's timeline.</p>
+<div class="box rule"><b>Two languages, two themes</b>Everything works in Arabic (right-to-left) and English, in light or dark mode. Each user chooses for themselves; receipts and Excel files can be produced in either language.</div>
+
+<!-- ============================================================ 2 -->
+<h1 class="ch"><span class="n">2</span>First start, licence and signing in</h1>
+<h2>Opening the system</h2>
+<p>Open Chrome or Edge and go to the address your administrator gives you, for example <span class="mono">http://localhost:5222</span> on the server itself or <span class="mono">https://assets.yourcompany.com</span> for the team.</p>
+<h2>First-time setup (done once, by the administrator)</h2>
+<ol class="steps">
+<li>On the server, read the one-time <b>setup code</b>: <span class="mono">docker compose logs assetmaster</span> (line “FIRST-TIME SETUP … setup code”).</li>
+<li>Open the address. The <b>setup screen</b> asks for the setup code, the company name (English and/or Arabic), the default language, and the first administrator's full name, username, e-mail and password.</li>
+<li>Click <span class="ui">Create my system</span>. You are signed in as <b>Super Administrator</b> and taken to the Licence page.</li>
+</ol>
+<div class="box tip"><b>Rules for usernames and passwords</b>Usernames: 3–40 characters, lowercase letters, digits, dot, dash or underscore. Passwords: at least 10 characters with both letters and numbers; very common passwords are refused.</div>
+<h2>Activating the licence</h2>
+<ol class="steps">
+<li>On <b>Licence</b>, click <span class="ui">Copy</span> next to the <b>activation request code</b> and send it to your vendor.</li>
+<li>You receive a licence file (<span class="mono">.lic</span>). Click <span class="ui">Choose file</span> (or paste its contents) and then <span class="ui">Activate licence</span>.</li>
+</ol>
+<p>Until a valid licence is active the system is <b>locked</b>: only the Super Administrator can sign in, and only the Licence and My account pages work.</p>
+<h2>Signing in</h2>
+<figure><img src="img/en_login.png"><figcaption>The sign-in page. The language and theme buttons are in the top corner.</figcaption></figure>
+<ul>
+<li>Enter your <b>username</b> and <b>password</b> and click <span class="ui">Sign in</span>.</li>
+<li>If an administrator created your account, you must <b>choose your own password</b> the first time.</li>
+<li>Too many wrong passwords lock the account for a few minutes (protection against guessing).</li>
+<li>You are signed out automatically after 30 minutes without activity, and after 12 hours in any case.</li>
+<li>If you opened a link (e.g. by scanning a QR label) before signing in, you are taken to that page right after signing in.</li>
+</ul>
+
+<!-- ============================================================ 3 -->
+<h1 class="ch"><span class="n">3</span>The screen: menu, top bar, alerts</h1>
+<figure><img src="img/en_dashboard.png"><figcaption>The main screen: menu on the side, top bar, and the page content.</figcaption></figure>
+<h2>The side menu</h2>
+<p>Pages are grouped. You only see the pages your role allows.</p>
+<table>
+<tr><th>Group</th><th>Pages</th></tr>
+<tr><td>—</td><td><b>Dashboard</b> — the overview.</td></tr>
+<tr><td><b>Inventory</b></td><td><b>Assets</b>, <b>Assignments</b>, <b>Employees</b>, <b>Categories</b></td></tr>
+<tr><td><b>Operations</b></td><td><b>Maintenance</b>, <b>Requests</b></td></tr>
+<tr><td><b>Insights</b></td><td><b>Reports</b></td></tr>
+<tr><td><b>Administration</b></td><td><b>Users</b>, <b>Roles &amp; permissions</b>, <b>Company &amp; branding</b>, <b>Licence</b>, <b>Audit log</b>, <b>Backups</b></td></tr>
+<tr><td>—</td><td><b>My account</b></td></tr>
+</table>
+<p>On a phone the menu is hidden; tap the <span class="ui">☰</span> button at the top left to open it.</p>
+<h2>The top bar (right side)</h2>
+<table>
+<tr><th>Button</th><th>What it does</th></tr>
+<tr><td><b>Page buttons</b></td><td>Each page puts its own main buttons here (for example <span class="ui">Add asset</span>, <span class="ui">Export to Excel</span>).</td></tr>
+<tr><td><b>Bell</b> 🔔</td><td>Opens your <b>alerts</b> (below). The red number is how many items need attention; it pulses when something is critical.</td></tr>
+<tr><td><b>العربية / English</b></td><td>Switches the language for you only. Your choice is remembered.</td></tr>
+<tr><td><b>Moon / Sun</b></td><td>Switches between dark and light mode.</td></tr>
+<tr><td><b>Your name</b></td><td>Opens a menu with <span class="ui">My account</span> and <span class="ui">Sign out</span>.</td></tr>
+</table>
+<h2>Alerts (the bell)</h2>
+<figure class="half"><img src="img/en_bell.png"><figcaption>The alerts list. Click any line to go to it.</figcaption></figure>
+<table>
+<tr><th>Alert</th><th>Meaning — and what happens when you click it</th></tr>
+<tr><td><span class="chip c-bad">Overdue</span></td><td>An employee has kept an asset past its expected return date. Opens the asset.</td></tr>
+<tr><td><span class="chip c-warn">Warranty</span></td><td>A warranty ends within the configured number of days (default 30). Opens the asset.</td></tr>
+<tr><td><span class="chip c-warn">Maintenance</span></td><td>Scheduled maintenance is due soon, or is already late (red). Opens the Maintenance page.</td></tr>
+<tr><td><span class="chip c-info">Request</span></td><td>An asset request is waiting for approval (approvers only). Opens Requests.</td></tr>
+<tr><td><span class="chip c-info">Decision</span></td><td>A request you made was approved or rejected in the last 7 days. Opens Requests.</td></tr>
+</table>
+<p>Alerts are calculated live and refresh every minute. <b>You never dismiss them</b> — they disappear by themselves when the cause is fixed (the asset is returned, the warranty date is updated, the maintenance is started…). Each person only sees alerts their role allows. Optionally the same list can be sent by e-mail every morning (chapter 19).</p>
+
+<!-- ============================================================ 4 -->
+<h1 class="ch"><span class="n">4</span>Dashboard</h1>
+<p>The dashboard is the first page after signing in. It shows the state of the whole inventory at a glance.</p>
+<h2>Summary cards</h2>
+<table>
+<tr><th>Card</th><th>What it shows</th></tr>
+<tr><td><b>Assets</b></td><td>Total number of assets and in how many categories.</td></tr>
+<tr><td><b>Assigned</b></td><td>How many assets are with employees, and how many returns are overdue (red).</td></tr>
+<tr><td><b>In stock</b></td><td>How many are available, and how many are in maintenance.</td></tr>
+<tr><td><b>Active employees</b></td><td>Number of active employees, total asset value (purchase cost of assets not retired or lost) and warranties ending soon.</td></tr>
+<tr><td><b>Active users · Roles · Licence · Last backup</b></td><td>System information: signed-in accounts, licence state and expiry, and when the last full backup was made.</td></tr>
+</table>
+<h2>Charts</h2>
+<ul>
+<li><b>Assets by status</b> — one bar split into In stock / Assigned / In maintenance / Retired / Lost.</li>
+<li><b>Assets by category</b> and <b>Assets held by department</b> — ranked bars.</li>
+<li><b>Handovers and returns</b> — a line chart of the last 12 months.</li>
+</ul>
+<p>Hover over (or tap) any bar or point to see exact numbers. Every chart has a <span class="ui">Table</span> button that shows the same numbers as a table; click <span class="ui">Chart</span> to go back.</p>
+<h2>Recent activity and Getting started</h2>
+<p><b>Recent activity</b> lists the latest actions from the audit log (only for users who may see the audit log). <b>Getting started</b> is a checklist for a new installation — activate the licence, upload the logo, add users, create categories, add employees, register the first asset, make a backup — each with an <span class="ui">Open</span> button that takes you to the right page.</p>
+
+<!-- ============================================================ 5 -->
+<h1 class="ch"><span class="n">5</span>Assets</h1>
+<p>The list of everything the company owns.</p>
+<figure><img src="img/en_assets.png"><figcaption>The Assets page.</figcaption></figure>
+<h2>Buttons and controls</h2>
+<table>
+<tr><th>Button / control</th><th>What it does</th></tr>
+<tr><td><span class="ui">Export to Excel</span></td><td>Downloads the assets shown by the current search and filters as an Excel file, including custom fields, holder and status (chapter 15).</td></tr>
+<tr><td><span class="ui">Import</span></td><td>Adds or updates many assets at once from an Excel file (chapter 15).</td></tr>
+<tr><td><span class="ui">Add asset</span></td><td>Opens the form to register a new asset (below).</td></tr>
+<tr><td><b>Search box</b></td><td>Finds assets by tag, name, serial number, brand, model, location or the holder's name / employee number. Results update as you type.</td></tr>
+<tr><td><span class="ui">All statuses</span></td><td>Shows only one status (e.g. only Assigned).</td></tr>
+<tr><td><span class="ui">All categories</span></td><td>Shows only one category.</td></tr>
+<tr><td><b>Tick boxes</b></td><td>Select assets for printing QR labels. The box in the header selects the whole page. Selections are kept when you change page.</td></tr>
+<tr><td><span class="ui">Print labels for this page</span> / <span class="ui">Print N labels</span></td><td>Opens the label sheet for the ticked assets — or for the whole page if nothing is ticked (chapter 14).</td></tr>
+<tr><td><b>Number badge</b></td><td>How many assets match the search.</td></tr>
+<tr><td><b>Arrows at the bottom</b></td><td>Next / previous page (25 assets per page).</td></tr>
+<tr><td><b>Clicking a row</b></td><td>Opens the asset's detail window (chapter 6).</td></tr>
+</table>
+<h2>Registering a new asset</h2>
+<figure><img src="img/en_assetform.png"><figcaption>The Add asset form. The category's custom fields appear under the standard fields.</figcaption></figure>
+<table>
+<tr><th>Field</th><th>Explanation</th></tr>
+<tr><td><b>Category</b> *</td><td>Required. Changing it shows that category's extra fields.</td></tr>
+<tr><td><b>Asset tag</b></td><td>Leave empty to get the next automatic tag (e.g. <span class="mono">LAP-00007</span>), or type your own existing sticker number. Must be unique.</td></tr>
+<tr><td><b>Name / description</b> *</td><td>What it is, e.g. “ThinkPad T14 Gen 4”.</td></tr>
+<tr><td><b>Brand, Model</b></td><td>Optional details.</td></tr>
+<tr><td><b>Serial number</b></td><td>Must be unique across all assets (the system refuses duplicates).</td></tr>
+<tr><td><b>Condition</b></td><td>New, Good, Fair, Poor or Damaged.</td></tr>
+<tr><td><b>Location, Supplier</b></td><td>Where it is kept and who sold it.</td></tr>
+<tr><td><b>Purchase date, Purchase cost</b></td><td>Used for asset value and depreciation reports.</td></tr>
+<tr><td><b>Warranty until</b></td><td>Creates a warranty alert before it ends.</td></tr>
+<tr><td><b>Category fields</b></td><td>The extra fields defined for the category (RAM, plate number…). Fields marked * are required.</td></tr>
+<tr><td><b>Notes</b></td><td>Free text, several lines.</td></tr>
+</table>
+<p>Click <span class="ui">Save</span>. A new asset always starts <span class="chip c-good">In stock</span>. A message shows the tag it received.</p>
+
+<!-- ============================================================ 6 -->
+<h1 class="ch"><span class="n">6</span>One asset: the detail window</h1>
+<figure><img src="img/en_asset.png"><figcaption>The detail window of an assigned asset.</figcaption></figure>
+<h2>Buttons at the top</h2>
+<table>
+<tr><th>Button</th><th>When it appears — what it does</th></tr>
+<tr><td><span class="ui">Assign</span></td><td>Only when the asset is In stock. Hands it to an employee (chapter 7).</td></tr>
+<tr><td><span class="ui">Return</span></td><td>Only when the asset is Assigned. Takes it back (chapter 7).</td></tr>
+<tr><td><span class="ui">Edit</span></td><td>Changes any detail (tag, serial, category, custom fields…). Every change is recorded in Activity.</td></tr>
+<tr><td><span class="ui">Change status</span></td><td>Not available while Assigned. Moves the asset to In stock, In maintenance, Retired or Lost, with a reason.</td></tr>
+<tr><td><span class="ui">Label</span></td><td>Opens a printable QR label for this asset.</td></tr>
+<tr><td><span class="ui">Delete</span></td><td>Only for assets that were <b>never</b> assigned (e.g. created by mistake). Assets with history are retired instead, never deleted.</td></tr>
+<tr><td><span class="ui">Close</span></td><td>Closes the window (or press Esc).</td></tr>
+</table>
+<h2>Sections of the window</h2>
+<ul>
+<li><b>Currently held by</b> (only when assigned) — the employee, since when, the due date (red if overdue) and the <span class="ui">Handover receipt</span> button.</li>
+<li><b>Details</b> — serial, condition, location, purchase date and cost, supplier, warranty (marked <span class="chip c-bad">Expired</span> when past) and when it was added.</li>
+<li><b>Category fields</b> — the values of the category's extra fields.</li>
+<li><b>Notes</b>.</li>
+<li><b>Assignment history</b> — every employee who held it, when it was handed over and returned, by which user, condition out → in, and links to both <b>receipts</b> (e.g. <span class="mono">HO-2026-0001</span>, <span class="mono">RT-2026-0001</span>).</li>
+<li><b>Activity</b> — the full timeline from the audit log: created, edited (how many fields), status changes with reason, assigned, returned, documents added, maintenance.</li>
+<li><b>Maintenance</b> — the asset's maintenance records with <span class="ui">Log maintenance</span> (chapter 11).</li>
+<li><b>Documents</b> — attached invoices, photos, warranty cards with <span class="ui">Upload files</span> (chapter 16).</li>
+</ul>
+
+<!-- ============================================================ 7 -->
+<h1 class="ch"><span class="n">7</span>Handing over and taking back (assignments)</h1>
+<h2>Assign an asset to an employee</h2>
+<ol class="steps">
+<li>Open the asset (it must be <b>In stock</b>) and click <span class="ui">Assign</span>.</li>
+<li>In <b>Employee</b>, type part of the name or employee number and click the person in the list. Only active employees appear.</li>
+<li><b>Expected return</b> — optional. Leave empty for permanent use; set a date for temporary loans. It cannot be in the past. Past this date the assignment becomes <b>Overdue</b>.</li>
+<li><b>Condition at handover</b> and <b>Notes</b> (e.g. “with charger and bag”).</li>
+<li>Click <span class="ui">Assign</span>. The asset becomes Assigned and a handover receipt number is created. Print the receipt and have the employee sign it (chapter 8).</li>
+</ol>
+<h2>Take an asset back</h2>
+<ol class="steps">
+<li>Open the asset and click <span class="ui">Return</span> (or use <span class="ui">Return</span> on the Assignments page).</li>
+<li>Choose the <b>Condition on return</b>.</li>
+<li><b>After return the asset is</b>: In stock (normal), In maintenance (needs repair), Retired or Lost.</li>
+<li>Add notes and click <span class="ui">Return</span>. A return receipt number is created.</li>
+</ol>
+<h2>The Assignments page</h2>
+<figure><img src="img/en_assignments.png"><figcaption>Everything that is currently with employees.</figcaption></figure>
+<table>
+<tr><th>Button / column</th><th>What it does</th></tr>
+<tr><td><b>Search</b></td><td>Find by asset tag/name or employee name/number.</td></tr>
+<tr><td><span class="ui">Export history</span></td><td>Downloads the complete history of all handovers and returns to Excel.</td></tr>
+<tr><td><span class="ui">Assets</span></td><td>Goes to the Assets page.</td></tr>
+<tr><td><b>Expected return</b></td><td>Red with <span class="chip c-bad">Overdue</span> when late. Overdue rows are listed first.</td></tr>
+<tr><td><b>Receipt link</b> (e.g. HO-2026-0003)</td><td>Opens the handover receipt.</td></tr>
+<tr><td><span class="ui">Return</span></td><td>Takes the asset back directly from this list.</td></tr>
+<tr><td><b>Clicking a row</b></td><td>Opens the asset.</td></tr>
+</table>
+
+<!-- ============================================================ 8 -->
+<h1 class="ch"><span class="n">8</span>Receipts</h1>
+<p>Every handover gets a number like <span class="mono">HO-2026-0001</span> and every return a number like <span class="mono">RT-2026-0001</span>. Numbers restart each year and are never reused.</p>
+<h2>Opening a receipt</h2>
+<p>Click <span class="ui">Handover receipt</span> on the asset, or any receipt number in an assignment history (asset window, employee window, Assignments page). The receipt opens in a new browser tab.</p>
+<h2>What is on the receipt</h2>
+<p>Company logo and name, receipt title and number, date and time, employee (name, number, department, job title), asset (tag, name, category, brand/model, serial, custom fields), condition, expected return or original handover date, notes, the <b>terms</b> text (configurable — chapter 19) and two signature lines (employee and the user who handed over / received it).</p>
+<h2>Buttons on the receipt page</h2>
+<table>
+<tr><th>Button</th><th>What it does</th></tr>
+<tr><td><span class="ui">Print / Save as PDF</span></td><td>Opens the browser's print window. Choose your printer — or choose <b>“Save as PDF”</b> as the printer to get a PDF file. The page is laid out for A4.</td></tr>
+<tr><td><span class="ui">العربية</span> / <span class="ui">English</span></td><td>Shows the receipt in Arabic or English, independent of your interface language.</td></tr>
+<tr><td><span class="ui">Attach signed copy</span></td><td>After the employee signs, scan or photograph the paper and upload it here. A link to the signed copy then appears on the receipt and on the asset's documents.</td></tr>
+</table>
+
+<!-- ============================================================ 9 -->
+<h1 class="ch"><span class="n">9</span>Employees and departments</h1>
+<figure><img src="img/en_employees.png"><figcaption>The Employees page.</figcaption></figure>
+<h2>Buttons and controls</h2>
+<table>
+<tr><th>Button / control</th><th>What it does</th></tr>
+<tr><td><span class="ui">Export to Excel</span></td><td>Downloads the employees shown by the current filters.</td></tr>
+<tr><td><span class="ui">Import</span></td><td>Adds or updates many employees from Excel (chapter 15).</td></tr>
+<tr><td><span class="ui">Departments</span></td><td>Opens the department list: add (English/Arabic name + <span class="ui">Add</span>), rename (pencil, then <span class="ui">Save</span>) or delete (bin — only for departments with no employees).</td></tr>
+<tr><td><span class="ui">Add employee</span></td><td>Registers a new employee.</td></tr>
+<tr><td><b>Search</b></td><td>By name, employee number, e-mail or job title.</td></tr>
+<tr><td><b>Status filter</b></td><td>Active employees (default), Left the company, or Everyone.</td></tr>
+<tr><td><b>Department filter</b></td><td>One department only.</td></tr>
+<tr><td><b>Holding</b> column</td><td>How many assets the employee holds right now.</td></tr>
+<tr><td><b>Clicking a row</b></td><td>Opens the employee's detail window.</td></tr>
+</table>
+<h2>Employee fields</h2>
+<p><b>Employee no.</b> (required, unique), <b>Full name</b> in English and/or Arabic (at least one), <b>Department</b>, <b>Job title</b>, <b>Status</b> (Active / Left), <b>E-mail</b>, <b>Phone</b>, <b>Notes</b>.</p>
+<h2>The employee detail window</h2>
+<figure><img src="img/en_employee.png"><figcaption>An employee with the assets they hold now and the receipts.</figcaption></figure>
+<ul>
+<li><span class="ui">Edit</span> — change the employee's details or mark them as <b>Left</b>.</li>
+<li><span class="ui">Delete</span> — only for employees who never received an asset.</li>
+<li><b>Assets held now</b> and <b>Previously held</b>, each with dates and receipt links. Click a row to open the asset.</li>
+<li><b>Documents</b> — e.g. a copy of the ID or a signed policy.</li>
+</ul>
+<div class="box rule"><b>Protection rules</b>An employee who still holds assets <b>cannot be marked as Left</b> — return their assets first. An employee with any assignment history <b>cannot be deleted</b> — mark them as Left instead, so the history stays complete.</div>
+
+<!-- ============================================================ 10 -->
+<h1 class="ch"><span class="n">10</span>Categories and custom fields</h1>
+<p>Categories are the types of assets. Create them before adding assets.</p>
+<figure><img src="img/en_categories.png"><figcaption>The Categories page: code, name, custom fields, useful life and number of assets.</figcaption></figure>
+<h2>Buttons</h2>
+<table>
+<tr><th>Button</th><th>What it does</th></tr>
+<tr><td><span class="ui">New category</span></td><td>Creates a category.</td></tr>
+<tr><td><b>Pencil</b></td><td>Edits a category and its fields.</td></tr>
+<tr><td><b>Bin</b></td><td>Deletes a category — only when it has no assets.</td></tr>
+</table>
+<h2>Category fields</h2>
+<table>
+<tr><th>Field</th><th>Explanation</th></tr>
+<tr><td><b>Name</b> (English / Arabic)</td><td>At least one language.</td></tr>
+<tr><td><b>Code</b> *</td><td>2–8 letters or digits, e.g. <span class="mono">LAP</span>. Used as the prefix of automatic tags (LAP-00001). Suggested automatically from the English name. Changing it later only affects new tags.</td></tr>
+<tr><td><b>Description</b></td><td>Optional.</td></tr>
+<tr><td><b>Useful life (years)</b></td><td>For straight-line depreciation in the value report. Leave empty if this kind of asset is not depreciated (e.g. land).</td></tr>
+</table>
+<h2>Custom fields</h2>
+<p>Extra information recorded for assets of this category. Click <span class="ui">Add field</span> for each one:</p>
+<table>
+<tr><th>Part</th><th>Explanation</th></tr>
+<tr><td><b>Label</b> (English / Arabic)</td><td>The field's name, e.g. “RAM (GB)” / “الذاكرة”.</td></tr>
+<tr><td><b>Type</b></td><td><b>Text</b>, <b>Number</b>, <b>Date</b>, <b>List</b> (choose from options) or <b>Yes / No</b>.</td></tr>
+<tr><td><b>Options</b></td><td>For List only: the choices separated by commas, e.g. “Windows, macOS, Linux”.</td></tr>
+<tr><td><b>Required</b></td><td>Assets of this category cannot be saved without this field.</td></tr>
+<tr><td><b>Bin</b></td><td>Removes the field. (Values already stored are kept but no longer shown.)</td></tr>
+</table>
+<div class="box tip"><b>Examples</b>Laptops: RAM (Number), CPU (Text), OS (List). Vehicles: Plate number (Text), Licence expiry (Date), Fuel card (Yes/No). Phones: IMEI (Text), Line number (Text).</div>
+
+<!-- ============================================================ 11 -->
+<h1 class="ch"><span class="n">11</span>Maintenance</h1>
+<p>A log of repairs, services, inspections and upgrades — with vendor, cost and result — plus scheduled maintenance that reminds you before it is due.</p>
+<figure><img src="img/en_maintenance.png"><figcaption>The Maintenance page.</figcaption></figure>
+<h2>Statuses</h2>
+<p><span class="chip c-warn">Scheduled</span> planned for a date · <span class="chip c-bad">Overdue</span> scheduled date has passed · <span class="chip c-info">In progress</span> work started · <span class="chip c-good">Completed</span> · <span class="chip c-mut">Cancelled</span>.</p>
+<h2>Buttons and controls</h2>
+<table>
+<tr><th>Button / control</th><th>What it does</th></tr>
+<tr><td><span class="ui">Log maintenance</span></td><td>Records new work (also available inside each asset's window).</td></tr>
+<tr><td><b>Search</b></td><td>By asset tag/name, title or vendor.</td></tr>
+<tr><td><b>Filter</b></td><td>Planned &amp; in progress (default), Scheduled, In progress, Completed, Cancelled, All.</td></tr>
+<tr><td><span class="ui">Start</span></td><td>For scheduled work: starts it now (optionally taking the asset out of service).</td></tr>
+<tr><td><span class="ui">Complete</span></td><td>For work in progress: enter the final cost, the result, and — if the asset was taken out of service — its condition after the work.</td></tr>
+<tr><td><b>Pencil</b></td><td>Edits the record.</td></tr>
+<tr><td><b>✕</b></td><td>Cancels the work.</td></tr>
+<tr><td><b>Clicking a row</b></td><td>Opens the asset.</td></tr>
+</table>
+<h2>Logging maintenance</h2>
+<ol class="steps">
+<li>Click <span class="ui">Log maintenance</span> and pick the <b>asset</b> (search by tag or name).</li>
+<li>Choose the <b>Type</b>: Repair, Service, Inspection, Upgrade or Other, and describe <b>What is being done</b>.</li>
+<li><b>Planned date</b>: leave empty to start now; a future date <b>schedules</b> the work and creates a reminder alert before it.</li>
+<li>Optional: <b>Vendor / technician</b>, <b>Cost</b>, <b>Details</b>.</li>
+<li><b>Take the asset out of service</b>: if the asset is in stock, it moves to <i>In maintenance</i> and cannot be assigned until the work is completed.</li>
+</ol>
+<div class="box rule"><b>Automatic return to stock</b>When the work that took the asset out of service is completed or cancelled, the asset goes back to <b>In stock</b> by itself. If several jobs are open on the same asset, it returns to stock only when the <b>last</b> one is closed. An asset that is with an employee is never taken out of service automatically. Retired or lost assets cannot get new maintenance.</div>
+<p>The total cost of maintenance appears in the <b>Maintenance &amp; costs</b> report.</p>
+
+<!-- ============================================================ 12 -->
+<h1 class="ch"><span class="n">12</span>Asset requests (approvals)</h1>
+<p>A simple approval workflow: someone asks for an asset for an employee, an approver decides. Typical use: HR requests a laptop for a new joiner; the asset manager approves and hands over in one step.</p>
+<figure><img src="img/en_requests.png"><figcaption>The Requests page with a pending request.</figcaption></figure>
+<h2>Buttons</h2>
+<table>
+<tr><th>Button</th><th>Who — what it does</th></tr>
+<tr><td><b>Pending / Approved / Rejected / All</b></td><td>Switches the list.</td></tr>
+<tr><td><span class="ui">New request</span></td><td>Requesters: choose the <b>employee</b>, the <b>category</b> (or “Any category”), the <b>needed by</b> date and the <b>reason</b> (required), then <span class="ui">Send request</span>.</td></tr>
+<tr><td><span class="ui">Approve</span></td><td>Approvers: shows the <b>in-stock assets of the requested category</b>. Pick one, optionally set an expected return date and a note, then <span class="ui">Approve &amp; assign</span>. The asset is assigned to the employee immediately (with a handover receipt) and the request becomes Approved.</td></tr>
+<tr><td><span class="ui">Reject</span></td><td>Approvers: a reason is required; the requester sees it.</td></tr>
+<tr><td><b>✕</b> (Cancel request)</td><td>The requester (for their own pending requests) or an approver.</td></tr>
+</table>
+<ul>
+<li>Under <b>Category</b> each pending request shows how many matching assets are <b>in stock</b> — useful to know before approving.</li>
+<li>Requesters only see <b>their own</b> requests; approvers see all of them.</li>
+<li>Approvers get a <span class="chip c-info">Request</span> alert for each pending request; requesters get a <span class="chip c-info">Decision</span> alert when it is decided.</li>
+</ul>
+
+<!-- ============================================================ 13 -->
+<h1 class="ch"><span class="n">13</span>Reports</h1>
+<figure><img src="img/en_reports.png"><figcaption>The Reports page: choose a report on the left, filter, export or print.</figcaption></figure>
+<h2>The six reports</h2>
+<table class="wide">
+<tr><th>Report</th><th>What it answers — filters</th></tr>
+<tr><td><b>Assets per employee</b></td><td>Who holds what right now, how many and their total value. Filter: department.</td></tr>
+<tr><td><b>Overdue returns</b></td><td>Assets past their expected return date, with the number of days late.</td></tr>
+<tr><td><b>Warranty expiry</b></td><td>Warranties ending in the next 30/60/90/180/365 days; tick <b>Include expired</b> to also see ended ones.</td></tr>
+<tr><td><b>Assignment activity</b></td><td>Every handover and return in a period: last 7/30/90 days, this month, this year, or a custom date range.</td></tr>
+<tr><td><b>Asset value &amp; depreciation</b></td><td>Purchase cost, accumulated depreciation and <b>book value</b>, summarised per category and then per asset. Filters: category, <b>Include retired &amp; lost</b>.</td></tr>
+<tr><td><b>Maintenance &amp; costs</b></td><td>Maintenance work and its cost in a period. Filters: status and date range.</td></tr>
+</table>
+<h2>Buttons</h2>
+<table>
+<tr><th>Button</th><th>What it does</th></tr>
+<tr><td><span class="ui">Export to Excel</span></td><td>Downloads the report with the same filters, always with <b>all</b> rows and a total row.</td></tr>
+<tr><td><span class="ui">Print</span></td><td>Prints the report alone (menu and buttons are hidden). Use “Save as PDF” for a PDF.</td></tr>
+<tr><td><b>Clicking a row</b></td><td>Opens that asset.</td></tr>
+</table>
+<div class="box tip"><b>How depreciation is calculated</b>Straight-line to zero: book value = cost − cost × (age in years ÷ useful life), never below zero. Example: a laptop bought for 1,200 two years ago with a 4-year life has a book value of about 600. Assets without a purchase date are shown at cost.</div>
+<p>On screen a report shows at most 2,000 rows (with a notice); totals always include everything, and the Excel export contains every row.</p>
+
+<!-- ============================================================ 14 -->
+<h1 class="ch"><span class="n">14</span>QR labels and scanning</h1>
+<p>Each asset can have a printed sticker with a QR code. Scanning it with a phone camera opens that asset in the system.</p>
+<h2>Printing labels</h2>
+<ol class="steps">
+<li>On <b>Assets</b>, tick the assets you want (or none, for the whole page) and click <span class="ui">Print labels…</span> — or click <span class="ui">Label</span> inside one asset.</li>
+<li>The label sheet opens in a new tab. Choose the size: <span class="ui">Small 50×25</span>, <span class="ui">Medium 70×37</span> (fits standard A4 sticker sheets with 24 labels) or <span class="ui">Large 100×50</span>.</li>
+<li>Check <b>QR link address</b>: it must be the address your team uses (e.g. <span class="mono">https://assets.yourcompany.com</span>). A yellow warning appears if it is a local address that phones cannot open. Set it once for everyone under Company &amp; branding → Alerts &amp; e-mail → <b>Address your team uses</b>.</li>
+<li>Click <span class="ui">Print / Save as PDF</span>. Each label shows the QR code, company name, the tag in large letters, the asset name and serial number.</li>
+</ol>
+<h2>Scanning</h2>
+<p>Open the phone camera and point it at the label; tap the link that appears. The system opens (sign in if needed) and shows that asset's detail window directly. If the tag no longer exists, a message says so.</p>
+
+<!-- ============================================================ 15 -->
+<h1 class="ch"><span class="n">15</span>Excel import and export</h1>
+<h2>Importing (employees or assets)</h2>
+<ol class="steps">
+<li>On Employees or Assets click <span class="ui">Import</span>.</li>
+<li>Click <span class="ui">Template</span> to download the Excel template. Sheet 1 has the column names; the <b>Help</b> sheet explains every column; for assets, the <b>Categories</b> sheet lists your category codes and their custom fields.</li>
+<li>Fill one row per employee / asset. Keep the column names in row 1 as they are.</li>
+<li>Click <span class="ui">Choose file</span>. The file is <b>checked immediately</b> — nothing is saved yet.</li>
+<li>Read the result: either “All N rows are valid”, or a table of problems with the <b>row number, column and the reason</b>. Fix the file and choose it again.</li>
+<li>When everything is valid, click <span class="ui">Import N rows</span>.</li>
+</ol>
+<div class="box rule"><b>All or nothing</b>If even one row has a problem, <b>nothing</b> is imported. You never end up with half a file in the system.</div>
+<table class="wide">
+<tr><th>Topic</th><th>Details</th></tr>
+<tr><td><b>Employee columns</b></td><td>emp_no* · full_name_en · full_name_ar · department · job_title · email · phone · status (active/left) · notes. Departments that don't exist yet are <b>created automatically</b>.</td></tr>
+<tr><td><b>Asset columns</b></td><td>category_code* · tag · name* · brand · model · serial_no · condition · location · purchase_date · purchase_cost · supplier · warranty_until · notes · assigned_to · plus one column per custom field (e.g. ram_gb).</td></tr>
+<tr><td><b>assigned_to</b></td><td>An employee number: the new asset is handed to that employee straight away (with a receipt). Perfect for loading the current situation on day one.</td></tr>
+<tr><td><b>Update existing</b></td><td>Tick “Update … that already exist” to change records that are already in the system (matched by employee number / asset tag). Only the columns present in the file are changed.</td></tr>
+<tr><td><b>Accepted values</b></td><td>Dates as 2026-03-31, 31/03/2026 or real Excel dates. Conditions and statuses in English or Arabic (good / جيد). Numbers like 1,200.50. Files: .xlsx or .csv.</td></tr>
+<tr><td><b>Limits</b></td><td>Up to 5,000 rows per file.</td></tr>
+</table>
+<h2>Exporting</h2>
+<p><span class="ui">Export to Excel</span> on Assets, Employees and Reports, and <span class="ui">Export history</span> on Assignments. Files open in Excel with the sheet set to right-to-left when you use Arabic. Exports use the same column names as the import template — so you can export, edit in Excel and import back with “update existing”.</p>
+
+<!-- ============================================================ 16 -->
+<h1 class="ch"><span class="n">16</span>Documents</h1>
+<p>Assets and employees have a <b>Documents</b> section: invoices, warranty cards, photos, contracts, ID copies. Signed receipts are attached to the receipt (chapter 8) and appear in the asset's activity.</p>
+<table>
+<tr><th>Button</th><th>What it does</th></tr>
+<tr><td><span class="ui">Upload files</span></td><td>Choose one or several files. Allowed: PDF, images (PNG, JPG, WebP, GIF), Word and Excel, up to 25 MB each.</td></tr>
+<tr><td><b>File name</b></td><td>Opens the file in a new tab (PDFs and images) or downloads it.</td></tr>
+<tr><td><b>Download arrow</b></td><td>Always downloads.</td></tr>
+<tr><td><b>Bin</b></td><td>Deletes the file (asks for confirmation; recorded in the audit log).</td></tr>
+</table>
+<p class="small">For safety the system checks the real content of every file, not just its name — a renamed program or web page is refused. Who may see or add documents follows the record: e.g. anyone who can view assets can open asset documents; adding needs the manage permission.</p>
+
+<!-- ============================================================ 17 -->
+<h1 class="ch"><span class="n">17</span>Users</h1>
+<figure><img src="img/en_users.png"><figcaption>The Users page.</figcaption></figure>
+<table>
+<tr><th>Button</th><th>What it does</th></tr>
+<tr><td><span class="ui">Add user</span></td><td>Username, full name, e-mail, role, and optionally a temporary password (leave empty to generate a strong one). The temporary password is shown <b>once</b> — give it to the person privately. They must change it at first sign-in.</td></tr>
+<tr><td><b>Pencil</b></td><td>Changes name, e-mail or role.</td></tr>
+<tr><td><b>Circular arrow</b> (Reset password)</td><td>Generates a new temporary password and signs the user out everywhere.</td></tr>
+<tr><td><b>Lock / tick</b> (Disable / Enable)</td><td>Disabling signs the user out immediately and blocks sign-in; the account and its history stay. You cannot disable yourself.</td></tr>
+<tr><td><b>Search</b></td><td>By username, name or e-mail.</td></tr>
+</table>
+<ul>
+<li>Status badges: <span class="chip c-good">Active</span>, <span class="chip c-bad">Disabled</span>, <span class="chip c-warn">Locked</span> (too many wrong passwords; unlocks by itself after a few minutes).</li>
+<li>The number of <b>active</b> users is limited by the licence. Disabled users don't count.</li>
+<li>You can only give roles that are not more powerful than your own. There must always be at least one active Super Administrator.</li>
+</ul>
+
+<!-- ============================================================ 18 -->
+<h1 class="ch"><span class="n">18</span>Roles and permissions</h1>
+<figure><img src="img/en_roles.png"><figcaption>Roles on the left; the selected role's permissions on the right.</figcaption></figure>
+<h2>Using the page</h2>
+<ul>
+<li>Click a role on the left to see its permissions. Tick or untick permissions and click <span class="ui">Save</span>.</li>
+<li><span class="ui">New role</span> creates a custom role (name in English/Arabic, description), then you choose its permissions.</li>
+<li><span class="ui">Delete</span> removes a custom role — only when no user has it. Built-in roles cannot be deleted.</li>
+<li>Permissions with a <b>lock</b> icon (activate licence, create backups, verify audit log) belong only to the Super Administrator.</li>
+<li>You cannot give a permission you don't have yourself, change your own role, or change the Super Administrator role. Only a Super Administrator can change the Company Administrator role.</li>
+</ul>
+<h2>Built-in roles (default permissions)</h2>
+<table class="roles">
+<tr><th>Can…</th><th>Super Admin</th><th>Company Admin</th><th>Asset Manager</th><th>HR</th><th>Viewer</th></tr>
+<tr><td>See dashboard, assets, reports</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td>Add / edit / retire assets, categories</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>—</td></tr>
+<tr><td>Assign and return assets</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>—</td></tr>
+<tr><td>See employees</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td>Add / edit employees &amp; departments</td><td>✓</td><td>✓</td><td>—</td><td>✓</td><td>—</td></tr>
+<tr><td>See maintenance</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>✓</td></tr>
+<tr><td>Log and close maintenance</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>—</td></tr>
+<tr><td>Request assets</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>—</td></tr>
+<tr><td>Approve requests</td><td>✓</td><td>✓</td><td>✓</td><td>—</td><td>—</td></tr>
+<tr><td>Manage users, roles, company settings</td><td>✓</td><td>✓</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>See licence, audit log, backups</td><td>✓</td><td>✓</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>Activate licence, make/download backups, verify audit log</td><td>✓</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+</table>
+<h2>All permissions</h2>
+<table class="perm">
+<tr><th>Permission</th><th>Allows</th></tr>
+<tr><td>View dashboard</td><td>The Dashboard page.</td></tr>
+<tr><td>View / Create, edit and disable users</td><td>The Users page / changing users.</td></tr>
+<tr><td>View / Create and edit roles</td><td>The Roles page / changing roles.</td></tr>
+<tr><td>View / Edit company settings &amp; branding</td><td>Company page, alert &amp; e-mail settings.</td></tr>
+<tr><td>View / Activate and renew licence 🔒</td><td>Licence page / installing licences.</td></tr>
+<tr><td>View audit log / Verify audit integrity 🔒</td><td>Audit log page / integrity check.</td></tr>
+<tr><td>View backups / Create backups 🔒</td><td>Backups page &amp; health / making, verifying and downloading backups.</td></tr>
+<tr><td>View assets</td><td>Assets, Assignments, asset details, documents, charts, receipts.</td></tr>
+<tr><td>Add, edit, retire and delete assets</td><td>Asset changes, status changes, asset import, asset documents.</td></tr>
+<tr><td>Manage categories &amp; custom fields</td><td>Categories page.</td></tr>
+<tr><td>Assign and return assets</td><td>Assign / Return, signed receipt upload.</td></tr>
+<tr><td>View employees / Add and edit employees &amp; departments</td><td>Employees page / changes, employee import and documents.</td></tr>
+<tr><td>View reports &amp; asset values</td><td>Reports page.</td></tr>
+<tr><td>View maintenance / Log and close maintenance</td><td>Maintenance page / changes.</td></tr>
+<tr><td>Request assets for employees / Approve requests</td><td>Requests page: creating / approving and rejecting.</td></tr>
+</table>
+
+<!-- ============================================================ 19 -->
+<h1 class="ch"><span class="n">19</span>Company, branding, alerts and e-mail</h1>
+<figure><img src="img/en_company.png"><figcaption>Company &amp; branding: identity, logo, receipt terms and the Alerts &amp; e-mail card.</figcaption></figure>
+<h2>Identity</h2>
+<table>
+<tr><th>Field / button</th><th>What it does</th></tr>
+<tr><td><b>Company name</b> (EN / AR)</td><td>Shown in the menu, sign-in page, receipts, labels and e-mails.</td></tr>
+<tr><td><b>Application name</b> (EN / AR)</td><td>The name of the system shown under the company name, e.g. “Asset Manager”.</td></tr>
+<tr><td><b>Primary / Accent colour</b></td><td>The brand colours (buttons, menu highlights, gradients). Pick with the colour box or type a code like #6D4AF2.</td></tr>
+<tr><td><b>Default language / theme</b></td><td>What new users and the sign-in page start with.</td></tr>
+<tr><td><b>Receipt terms</b> (EN / AR)</td><td>The text printed above the signatures on handover and return receipts. Empty = the standard text.</td></tr>
+<tr><td><span class="ui">Save</span></td><td>Saves the identity fields.</td></tr>
+<tr><td><span class="ui">Upload logo</span> / <span class="ui">Remove</span></td><td>PNG, JPG or WebP up to 1 MB; square images look best.</td></tr>
+</table>
+<h2>Alerts &amp; e-mail</h2>
+<table>
+<tr><th>Field / button</th><th>What it does</th></tr>
+<tr><td><b>Address your team uses</b></td><td>The real web address of the system. Used in QR labels and e-mail links.</td></tr>
+<tr><td><b>Warn about warranties ending within (days)</b></td><td>Default 30.</td></tr>
+<tr><td><b>Warn about maintenance due within (days)</b></td><td>Default 7.</td></tr>
+<tr><td><b>Send a daily e-mail summary of alerts</b></td><td>Turns the morning e-mail on. Each user receives only the alerts their role allows, and only on days when there is something.</td></tr>
+<tr><td><b>Mail server (SMTP), Port, Security</b></td><td>Your company's mail server, e.g. smtp.office365.com, port 587, STARTTLS. (SSL/TLS uses port 465; “None” only for internal servers.)</td></tr>
+<tr><td><b>Send at</b></td><td>The hour of the daily e-mail (server time zone).</td></tr>
+<tr><td><b>User name, Password</b></td><td>The mailbox login. The password is stored <b>encrypted</b> and never shown again; leave it empty to keep the saved one.</td></tr>
+<tr><td><b>Sender address</b></td><td>e.g. assets@yourcompany.com.</td></tr>
+<tr><td><span class="ui">Send test e-mail to me</span></td><td>Saves and sends a test message to your own e-mail address.</td></tr>
+<tr><td><span class="ui">Send today's summary now</span></td><td>Sends the daily e-mail immediately to everyone subscribed.</td></tr>
+</table>
+
+<!-- ============================================================ 20 -->
+<h1 class="ch"><span class="n">20</span>Licence</h1>
+<table>
+<tr><th>Part / button</th><th>What it does</th></tr>
+<tr><td><b>Status</b></td><td><span class="chip c-good">Active</span>, <span class="chip c-warn">Grace period</span> (expired, still working for a few days — renew now), <span class="chip c-bad">Expired</span>, Not activated, Revoked, Wrong server, Clock problem.</td></tr>
+<tr><td><b>Details</b></td><td>Licensed to, edition, issued, expires (with days left), users active / allowed, features, licence ID, activation date.</td></tr>
+<tr><td><b>Activation request code</b> + <span class="ui">Copy</span></td><td>Send this to your vendor to receive a licence for this server. The <b>Deployment ID</b> identifies this installation.</td></tr>
+<tr><td><span class="ui">Activate licence</span> / <span class="ui">Choose file</span></td><td>Installs a new or renewed licence (paste the text or choose the file).</td></tr>
+<tr><td><span class="ui">Advanced</span></td><td>Installs a revocation list from the vendor (rarely needed).</td></tr>
+<tr><td><b>Licence history</b></td><td>Every activation, renewal and state change.</td></tr>
+</table>
+<div class="box warn"><b>Moving to a new server</b>A licence belongs to one installation. A new server shows a new request code — ask the vendor for a new licence. A banner warns all administrators 30 days before expiry.</div>
+
+<!-- ============================================================ 21 -->
+<h1 class="ch"><span class="n">21</span>Audit log</h1>
+<p>A permanent record of important actions: sign-ins (and failed attempts), every change to assets, employees, categories, users, roles, settings, licences, backups, imports, documents, maintenance and requests. Entries cannot be edited or deleted.</p>
+<table>
+<tr><th>Control</th><th>What it does</th></tr>
+<tr><td><b>Search</b></td><td>Searches inside the details.</td></tr>
+<tr><td><b>User</b></td><td>Only one username.</td></tr>
+<tr><td><b>Action starts with…</b></td><td>e.g. <span class="mono">asset.</span> for all asset actions, <span class="mono">auth.</span> for sign-ins.</td></tr>
+<tr><td><b>Arrows</b></td><td>Pages of 25 entries.</td></tr>
+<tr><td><span class="ui">Verify integrity</span></td><td>(Super Administrator) Checks the whole chain. Each entry contains a fingerprint of the previous one, so if anyone changed the database directly, the check reports the first altered entry.</td></tr>
+</table>
+
+<!-- ============================================================ 22 -->
+<h1 class="ch"><span class="n">22</span>Backups and system health</h1>
+<figure><img src="img/en_backups.png"><figcaption>Backups and the System health panel.</figcaption></figure>
+<h2>Backups</h2>
+<p>A <b>full backup</b> is one file containing the database <b>and every uploaded file</b> (documents, signed receipts, logo), with a checksum for each file. One is made automatically every day; the newest 14 are kept. A <b>database-only</b> copy is also taken automatically before every upgrade.</p>
+<table>
+<tr><th>Button</th><th>What it does</th></tr>
+<tr><td><span class="ui">Back up now</span></td><td>Makes a full backup immediately.</td></tr>
+<tr><td><span class="ui">Verify</span></td><td>Re-checks every file in the backup and the database integrity. “Backup is intact” — or “Backup is damaged — do not rely on it”.</td></tr>
+<tr><td><b>Download arrow</b></td><td>(Super Administrator) Downloads the backup so you can keep a copy on another computer or cloud drive.</td></tr>
+</table>
+<div class="box warn"><b>Keep a copy somewhere else</b>A backup on the same disk does not survive a disk failure. Download a backup regularly (e.g. weekly) and store it elsewhere.</div>
+<h2>Restoring</h2>
+<p>Restoring is done on the server by the administrator, with the application stopped (the commands are shown on the page and in chapter 26). The current state is first saved automatically as a “before-restore” backup, and a damaged backup is never restored.</p>
+<h2>System health</h2>
+<table>
+<tr><th>Check</th><th>Meaning</th></tr>
+<tr><td>Database integrity, broken links</td><td>The database file is healthy.</td></tr>
+<tr><td>Database version</td><td>All upgrades are applied.</td></tr>
+<tr><td>Audit log (tamper check)</td><td>Only in <span class="ui">Full check</span>: every audit entry is re-verified.</td></tr>
+<tr><td>Missing document files / unused files</td><td>Uploaded files deleted from the server / leftover files.</td></tr>
+<tr><td>Last full backup</td><td>Warning if older than 36 hours.</td></tr>
+<tr><td>Free disk space, licence, database size</td><td>Warning below 1 GB free; licence state.</td></tr>
+</table>
+<p>Each problem line explains what to do. <span class="ui">Full check</span> runs everything, including the audit chain (takes a little longer).</p>
+
+<!-- ============================================================ 23 -->
+<h1 class="ch"><span class="n">23</span>My account</h1>
+<figure><img src="img/en_account.png"><figcaption>My account.</figcaption></figure>
+<ul>
+<li><b>Profile</b> — your name, username, e-mail and role (an administrator changes these).</li>
+<li><b>Preferences</b> — language (English / العربية) and theme (Light / Dark / System).</li>
+<li><b>E-mail me a daily summary of alerts</b> — your personal on/off switch (needs an e-mail address on your account).</li>
+<li><b>Change password</b> — current password, new password twice. All your other sessions are signed out.</li>
+</ul>
+
+<!-- ============================================================ 24 -->
+<h1 class="ch"><span class="n">24</span>Everyday recipes</h1>
+<h3>Day one: load the real data</h3>
+<ol class="steps"><li>Create the categories (with codes, useful life and custom fields).</li><li>Employees → Import → fill the template → import (departments are created automatically).</li><li>Assets → Import → fill the template; put the employee number in <b>assigned_to</b> for assets already with people → import.</li><li>Print QR labels for everything and stick them on.</li></ol>
+<h3>A new employee needs a laptop</h3>
+<ol class="steps"><li>HR adds the employee (or imports them).</li><li>HR → Requests → New request (category Laptops, reason “new joiner”).</li><li>Asset manager → Requests → Approve → picks a laptop → Approve &amp; assign.</li><li>Open the handover receipt, print, sign, then Attach signed copy.</li></ol>
+<h3>An employee leaves the company</h3>
+<ol class="steps"><li>Open the employee: “Assets held now” shows everything they have.</li><li>Return each asset (choose condition; In maintenance if it needs repair).</li><li>Print the return receipts and get them signed.</li><li>Edit the employee → Status: Left.</li></ol>
+<h3>A device breaks</h3>
+<ol class="steps"><li>If it is with an employee: Return it with “After return: In maintenance”, or simply log maintenance while they keep it.</li><li>Log maintenance (Repair, vendor, cost estimate).</li><li>When fixed: Complete with the final cost and result — it returns to stock automatically.</li><li>Beyond repair: Change status → Retired (with a reason).</li></ol>
+<h3>A device is lost</h3>
+<ol class="steps"><li>If assigned: Return it with “After return: Lost” and a note. Otherwise Change status → Lost.</li></ol>
+<h3>Yearly stock-take</h3>
+<ol class="steps"><li>Assets → Export to Excel; walk around and scan labels or tick the list.</li><li>Fix locations in Excel and import back with “Update assets that already exist”.</li><li>Run the Value &amp; depreciation report for the finance team.</li></ol>
+<h3>Every week (administrator)</h3>
+<ol class="steps"><li>Look at the bell and the Overdue returns report.</li><li>Backups → Verify the latest backup → download a copy and store it elsewhere.</li></ol>
+
+<!-- ============================================================ 25 -->
+<h1 class="ch"><span class="n">25</span>Rules the system enforces &amp; messages</h1>
+<p>These rules protect your records. When something is refused, the message tells you why.</p>
+<table class="wide">
+<tr><th>Message (short)</th><th>Why — and what to do</th></tr>
+<tr><td>Already assigned</td><td>An asset can only be with one person. Return it first.</td></tr>
+<tr><td>Only in-stock assets can be assigned</td><td>It is in maintenance, retired or lost. Change its status first.</td></tr>
+<tr><td>Return before changing status</td><td>Status of an assigned asset changes only through Return.</td></tr>
+<tr><td>Has assignment history, cannot be deleted</td><td>Retire the asset instead — history is never deleted.</td></tr>
+<tr><td>Employee still holds assets</td><td>Return them before marking the employee as Left.</td></tr>
+<tr><td>Employee has history</td><td>Mark as Left instead of deleting.</td></tr>
+<tr><td>Category / department in use</td><td>Move or remove its assets / employees first.</td></tr>
+<tr><td>Tag / serial / employee number already used</td><td>These must be unique.</td></tr>
+<tr><td>Date cannot be in the past</td><td>Expected return dates must be today or later.</td></tr>
+<tr><td>Only pick an asset from the requested category</td><td>When approving a request.</td></tr>
+<tr><td>Licence does not allow more active users</td><td>Disable an unused account or get a bigger licence.</td></tr>
+<tr><td>You cannot grant a permission you do not have</td><td>Ask a more senior administrator.</td></tr>
+<tr><td>File type not allowed</td><td>Use PDF, images, Word or Excel.</td></tr>
+<tr><td>Required columns are missing (import)</td><td>Use the template's column names in row 1.</td></tr>
+<tr><td>A valid licence is required / system locked</td><td>The Super Administrator must activate or renew the licence.</td></tr>
+<tr><td>Security check failed. Reload the page.</td><td>The page was open too long; press F5.</td></tr>
+</table>
+
+<!-- ============================================================ 26 -->
+<h1 class="ch"><span class="n">26</span>For the server administrator</h1>
+<h2>Running with Docker</h2>
+<pre>cd D:\nproject\AssetMaster          # the folder that contains docker-compose.yml
+docker compose up -d --build        # start / upgrade
+docker compose logs assetmaster     # setup code, errors
+docker compose stop                 # stop</pre>
+<p>All company data lives in the Docker volume <span class="mono">am_data</span>: database, uploads, backups, secrets. <b>Never run</b> <span class="mono">docker compose down -v</span> — the <span class="mono">-v</span> deletes the data. Set the company time zone in a <span class="mono">.env</span> file next to docker-compose.yml, e.g. <span class="mono">TZ=Africa/Cairo</span>.</p>
+<h2>Admin commands</h2>
+<pre>docker compose exec assetmaster python tools/manage.py info            # version, users, licence
+docker compose exec assetmaster python tools/manage.py backup          # full backup now
+docker compose exec assetmaster python tools/manage.py verify &lt;file&gt;   # check a backup
+docker compose exec assetmaster python tools/manage.py check           # system health
+docker compose exec assetmaster python tools/manage.py reset-password &lt;username&gt;
+docker compose exec assetmaster python tools/manage.py request-code    # licence request code
+
+# restore (app stopped):
+docker compose stop
+docker compose run --rm assetmaster python tools/manage.py restore backup_YYYYMMDD_HHMMSS_auto.zip
+docker compose up -d</pre>
+<h2>Issuing a licence (vendor side, on the master computer)</h2>
+<pre>python tools\license_tool.py issue --private vendor_keys\vendor_private.pem --request "&lt;request code&gt;" --days 365 --max-users 10 --out customer.lic</pre>
+<div class="box warn"><b>Keep the private key private</b><span class="mono">vendor_keys\vendor_private.pem</span> can create licences. Never copy it to a server or share it. Use <span class="mono">tools\make_deployment.py</span> to build a clean folder for each company — it refuses to include the private key.</div>
+<h2>Security built in</h2>
+<p>Encrypted password storage, sessions with time-outs, protection against cross-site attacks, sign-in lock-out, role-based permissions checked on every request, tamper-evident audit log, uploaded-file checks, encrypted e-mail password, read-only container. For use over a network, put the system behind HTTPS (see docs/DEPLOY_DOCKER.md).</p>
+
+<!-- ============================================================ 27 -->
+<h1 class="ch"><span class="n">27</span>Glossary</h1>
+<table>
+<tr><th>Term</th><th>Meaning</th></tr>
+<tr><td>Asset tag</td><td>The asset's unique code (LAP-00001), printed on its label.</td></tr>
+<tr><td>Assignment / custody</td><td>An asset handed to an employee until it is returned.</td></tr>
+<tr><td>Handover receipt (HO)</td><td>The signed paper for a handover.</td></tr>
+<tr><td>Return receipt (RT)</td><td>The signed paper for a return.</td></tr>
+<tr><td>Overdue</td><td>Not returned by the expected return date.</td></tr>
+<tr><td>Book value</td><td>Cost minus depreciation — what the asset is worth on paper today.</td></tr>
+<tr><td>Useful life</td><td>How many years a type of asset is depreciated over.</td></tr>
+<tr><td>Out of service</td><td>Temporarily unavailable because of maintenance.</td></tr>
+<tr><td>Super Administrator</td><td>The all-powerful role; the only one that manages licences and backups.</td></tr>
+<tr><td>Deployment ID</td><td>The identity of one installation; licences are bound to it.</td></tr>
+<tr><td>Full backup</td><td>A single file with the database and all uploaded files.</td></tr>
+<tr><td>Audit log</td><td>The permanent, tamper-evident record of actions.</td></tr>
+</table>
+<p class="small" style="margin-top:8mm">Asset Master 0.8.0 — this guide describes the default roles and settings; your administrator may have adjusted roles, names and colours for your company.</p>
+</body>
+</html>

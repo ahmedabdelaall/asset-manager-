@@ -7,3 +7,4 @@ docs
 vendor_keys
 vendor_private*
 .env
+data_import

@@ -12,17 +12,28 @@ CATALOG = [
     ("license.view", "license"), ("license.manage", "license"),
     ("audit.view", "audit"), ("audit.verify", "audit"),
     ("backup.view", "backup"), ("backup.manage", "backup"),
+    ("assets.view", "assets"), ("assets.manage", "assets"), ("categories.manage", "assets"),
+    ("assignments.manage", "assignments"),
+    ("employees.view", "employees"), ("employees.manage", "employees"),
+    ("reports.view", "reports"),
+    ("maintenance.view", "maintenance"), ("maintenance.manage", "maintenance"),
+    ("requests.create", "requests"), ("requests.approve", "requests"),
 ]
+ASSET_PERMS = ["assets.view", "assets.manage", "categories.manage", "assignments.manage", "employees.view"]
 
 # key -> (name_en, name_ar, description, all_permissions, default permission list)
 SYSTEM_ROLES = {
     "super_admin": ("Super Administrator", "المدير الأعلى", "Full control, including licensing and system settings.", 1, []),
     "company_admin": ("Company Administrator", "مدير الشركة", "Manages users, roles and company settings.", 0,
                       ["dashboard.view", "users.view", "users.manage", "roles.view", "roles.manage", "company.view",
-                       "company.manage", "license.view", "audit.view", "backup.view"]),
-    "asset_manager": ("Asset Manager", "مدير الأصول", "Manages assets and assignments.", 0, ["dashboard.view", "company.view"]),
-    "hr": ("HR", "الموارد البشرية", "Manages employees and their documents.", 0, ["dashboard.view", "company.view"]),
-    "viewer": ("Viewer", "مشاهد", "Read-only access.", 0, ["dashboard.view"]),
+                       "company.manage", "license.view", "audit.view", "backup.view"] + ASSET_PERMS +
+                      ["employees.manage", "reports.view", "maintenance.view", "maintenance.manage", "requests.create", "requests.approve"]),
+    "asset_manager": ("Asset Manager", "مدير الأصول", "Manages assets and assignments.", 0,
+                      ["dashboard.view", "company.view"] + ASSET_PERMS +
+                      ["reports.view", "maintenance.view", "maintenance.manage", "requests.create", "requests.approve"]),
+    "hr": ("HR", "الموارد البشرية", "Manages employees and their documents.", 0,
+           ["dashboard.view", "company.view", "employees.view", "employees.manage", "assets.view", "reports.view", "requests.create"]),
+    "viewer": ("Viewer", "مشاهد", "Read-only access.", 0, ["dashboard.view", "assets.view", "employees.view", "reports.view", "maintenance.view"]),
 }
 # Permissions that only the Super Administrator can grant or hold implicitly
 SUPER_ONLY = {"license.manage", "backup.manage", "audit.verify"}

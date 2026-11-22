@@ -7,3 +7,5 @@ vendor_private*
 *.db
 *.db-wal
 *.db-shm
+data_import/
+*.lic

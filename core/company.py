@@ -63,13 +63,17 @@ def _validate(d, creating=False):
 
 
 def update(db, data):
-    if get(db) is None:
+    old = get(db)
+    if old is None:
         raise ApiError(409, "not_configured", "Company is not configured yet")
     v = _validate(data)
+    # receipt terms are optional in the request: keep the stored text when the client does not send them
+    v["receipt_terms_en"] = text(data, "receipt_terms_en", maxlen=3000, required=False) if "receipt_terms_en" in data else old["receipt_terms_en"]
+    v["receipt_terms_ar"] = text(data, "receipt_terms_ar", maxlen=3000, required=False) if "receipt_terms_ar" in data else old["receipt_terms_ar"]
     db.execute("UPDATE company SET name_en=?,name_ar=?,app_name_en=?,app_name_ar=?,primary_color=?,accent_color=?,"
-               "default_language=?,default_theme=?,updated_at=? WHERE id=1",
+               "default_language=?,default_theme=?,receipt_terms_en=?,receipt_terms_ar=?,updated_at=? WHERE id=1",
                (v["name_en"], v["name_ar"], v["app_name_en"], v["app_name_ar"], v["primary_color"], v["accent_color"],
-                v["default_language"], v["default_theme"], now_iso()))
+                v["default_language"], v["default_theme"], v["receipt_terms_en"], v["receipt_terms_ar"], now_iso()))
     return v
 
 

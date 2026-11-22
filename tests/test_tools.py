@@ -79,6 +79,8 @@ class TestTools(unittest.TestCase):
         # backup + restore round trip
         out = run("tools/manage.py", "backup", env=env_vars).stdout
         name = os.path.basename(out.split(": ")[1].strip())
+        env.httpd.shutdown()                  # restore requires the server to be stopped (Windows locks open files)
+        env.app.db.close_thread()
         run("tools/manage.py", "restore", name, env=env_vars)
         self.assertIn("before-restore", " ".join(os.listdir(env.app.inst.backups_dir)))
 
@@ -90,7 +92,14 @@ class TestTools(unittest.TestCase):
         run("tools/make_deployment.py", "--name", "acme", "--port", "5333", "--out", tmp, "--public-key", os.path.join(keys, "vendor_public.pem"))
         dep = os.path.join(tmp, "acme")
         self.assertTrue(os.path.isfile(os.path.join(dep, "core", "keys", "vendor_public.pem")))
-        self.assertIn("AM_PORT=5333", open(os.path.join(dep, ".env")).read())
+        env = open(os.path.join(dep, ".env")).read()
+        self.assertIn("AM_PORT=5333", env)
+        self.assertIn("AM_LICENSE=on", env)                     # default: licensing stays on
+        self.assertIn("TZ=Africa/Cairo", env)
+        run("tools/make_deployment.py", "--name", "beta", "--port", "5334", "--out", tmp, "--license", "off", "--tz", "Asia/Riyadh")
+        env2 = open(os.path.join(tmp, "beta", ".env")).read()
+        self.assertIn("AM_LICENSE=off", env2)
+        self.assertIn("TZ=Asia/Riyadh", env2)
         self.assertIn("am-acme", open(os.path.join(dep, "docker-compose.yml")).read())
         for base, _, files in os.walk(dep):
             for f in files:

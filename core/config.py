@@ -19,6 +19,7 @@ DEFAULTS = {
     "max_upload_mb": 25,
     "backup_keep": 14,
     "auto_backup_hour": 2,          # local hour of day for the automatic daily backup (-1 disables)
+    "license_enabled": True,        # false (AM_LICENSE=off): no licence needed - no lock, no user limit, licence screens hidden
     "license_server_url": "",       # optional: online revocation-list URL (offline mode works without it)
     "public_key_path": "",          # optional override for the vendor public key
     "allowed_hosts": [],            # optional: only answer requests for these Host names (e.g. ["assets.mycompany.com"])
@@ -43,7 +44,8 @@ class Instance:
         for env, key, cast in (("AM_HOST", "host", str), ("AM_PORT", "port", int), ("AM_HTTPS", "https", _b),
                                ("AM_TRUST_PROXY", "trust_proxy", _b), ("AM_ALLOWED_HOSTS", "allowed_hosts", _l),
                                ("AM_PUBLIC_KEY_PATH", "public_key_path", str), ("AM_LICENSE_SERVER_URL", "license_server_url", str),
-                               ("AM_SESSION_IDLE_MINUTES", "session_idle_minutes", int), ("AM_BACKUP_KEEP", "backup_keep", int)):
+                               ("AM_SESSION_IDLE_MINUTES", "session_idle_minutes", int), ("AM_BACKUP_KEEP", "backup_keep", int),
+                               ("AM_LICENSE", "license_enabled", _b)):
             if os.environ.get(env):
                 self.config[key] = cast(os.environ[env])
         self.secret_key = self._load_secret()

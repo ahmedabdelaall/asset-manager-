@@ -307,6 +307,16 @@ class TestLicense(Base):
         c = self.admin(licensed=False)
         self.assertEqual(c.get("/api/license")[1]["state"], "no_key")
 
+    def test_deployment_id_survives_container_recreation(self):
+        from unittest import mock
+        inst = self.env.app.inst
+        with mock.patch.object(licensing, "_os_machine_id", return_value=None), mock.patch.object(licensing.uuid, "getnode", return_value=0xAAAA):
+            first = licensing.deployment_id(inst)
+        with mock.patch.object(licensing, "_os_machine_id", return_value=None), mock.patch.object(licensing.uuid, "getnode", return_value=0xBBBB):
+            self.assertEqual(licensing.deployment_id(inst), first)          # new random MAC, same deployment
+        with open(os.path.join(inst.path, "machine_id")) as f:
+            self.assertEqual(f.read(), "node-%012x" % 0xAAAA)
+
     def test_license_events_cannot_be_edited(self):
         self.admin()
         with self.assertRaises(sqlite3.DatabaseError):
@@ -361,16 +371,22 @@ class TestAuditAndData(Base):
         c = self.admin()
         for _ in range(3):
             self.assertEqual(c.post("/api/backups")[0], 200)
-        bl = c.get("/api/backups")[1]["backups"]
+        bl = [b for b in c.get("/api/backups")[1]["backups"] if b["kind"] == "full"]
         self.assertGreaterEqual(len(bl), 3)
-        con = sqlite3.connect(os.path.join(self.env.app.inst.backups_dir, bl[0]["name"]))
+        import zipfile
+        snap = os.path.join(self.env.dir, "snap.db")
+        with zipfile.ZipFile(os.path.join(self.env.app.inst.backups_dir, bl[0]["name"])) as z, open(snap, "wb") as f:
+            f.write(z.read("data.db"))
+        con = sqlite3.connect(snap)
         self.assertGreaterEqual(con.execute("SELECT COUNT(*) FROM users").fetchone()[0], 1)
         con.close()
 
     def test_migrations_detect_modified_file_and_are_idempotent(self):
         db = self.env.app.db
         self.assertEqual(db.migrate(), [])
-        self.assertEqual(db.schema_version(), "0001")
+        from core.server import MIGRATIONS
+        latest = sorted(f for f in os.listdir(MIGRATIONS) if f.endswith(".sql"))[-1][:4]
+        self.assertEqual(db.schema_version(), latest)
         db.execute("UPDATE schema_migrations SET checksum='bad' WHERE version='0001'")
         from core.db import MigrationError
         with self.assertRaises(MigrationError):

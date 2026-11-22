@@ -48,7 +48,33 @@ def canonical(payload):
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
-def machine_id():
+def machine_id(inst=None):
+    """The server's identity. Containers have no stable OS machine id and get a random network address each time
+    they are recreated, so in that case the fallback value is stored once in the instance folder and reused -
+    otherwise every image rebuild would change the deployment ID and lock the licence."""
+    env = os.environ.get("AM_MACHINE_ID", "").strip()
+    if env:
+        return env
+    v = _os_machine_id()
+    if v:
+        return v
+    if inst is None:
+        return "node-%012x" % uuid.getnode()
+    p = os.path.join(inst.path, "machine_id")
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            v = f.read().strip()
+            if v:
+                return v
+    except OSError:
+        pass
+    v = "node-%012x" % uuid.getnode()      # same value as before this file existed, so current licences stay valid
+    with open(p, "w", encoding="utf-8") as f:
+        f.write(v)
+    return v
+
+
+def _os_machine_id():
     for p in ("/etc/machine-id", "/var/lib/dbus/machine-id"):
         try:
             with open(p, "r", encoding="utf-8") as f:
@@ -64,11 +90,11 @@ def machine_id():
             return str(winreg.QueryValueEx(k, "MachineGuid")[0])
     except Exception:
         pass
-    return "node-%012x" % uuid.getnode()
+    return None
 
 
 def deployment_id(inst):
-    return hashlib.sha256(("%s|%s" % (machine_id(), inst.install_id)).encode("utf-8")).hexdigest()[:32]
+    return hashlib.sha256(("%s|%s" % (machine_id(inst), inst.install_id)).encode("utf-8")).hexdigest()[:32]
 
 
 def load_public_key(inst):
@@ -166,10 +192,18 @@ def revoked_ids(db, inst, pub):
         return set()
 
 
+def enabled(inst):
+    """Licensing can be switched off per deployment (config "license_enabled": false or AM_LICENSE=off), e.g. for a
+    company running its own copy. The code stays in place so it can be switched back on with one setting."""
+    return bool(inst.config.get("license_enabled", True))
+
+
 def compute_status(db, inst, now=None):
     now_ts = int(now if now is not None else time.time())
     dep = deployment_id(inst)
     base = {"state": "missing", "locked": True, "deployment_id": dep, "license": None, "days_left": None, "grace_until": None}
+    if not enabled(inst):
+        return dict(base, state="disabled", locked=False, disabled=True)      # license None -> no user limit
     pub = load_public_key(inst)
     if pub is None:
         return dict(base, state="no_key")
@@ -239,6 +273,8 @@ class Manager:
 
     def has_feature(self, name):
         s = self.status()
+        if s["state"] == "disabled":
+            return True
         return (not s["locked"]) and s["license"] is not None and name in s["license"]["features"]
 
     def max_users(self):

@@ -13,16 +13,17 @@ IP_WINDOW, IP_MAX = 10 * 60, 30
 
 
 class IpLimiter:
-    def __init__(self):
+    def __init__(self, window=IP_WINDOW, maximum=IP_MAX):
         self._hits, self._lock = defaultdict(deque), threading.Lock()
+        self.window, self.maximum = window, maximum
 
     def check(self, ip):
         now = time.time()
         with self._lock:
             q = self._hits[ip]
-            while q and now - q[0] > IP_WINDOW:
+            while q and now - q[0] > self.window:
                 q.popleft()
-            return len(q) < IP_MAX
+            return len(q) < self.maximum
 
     def fail(self, ip):
         with self._lock:
@@ -240,7 +241,8 @@ class Auth:
         return {"id": u["id"], "username": u["username"], "full_name": u["full_name"], "email": u["email"],
                 "role_id": u["role_id"], "role_key": r["key"], "role_name_en": r["name_en"], "role_name_ar": r["name_ar"],
                 "is_super": bool(r["all_permissions"]), "must_change_password": bool(u["must_change_password"]),
-                "lang": u["lang"], "theme": u["theme"], "permissions": perms}
+                "lang": u["lang"], "theme": u["theme"], "permissions": perms,
+                "email_alerts": bool(u["email_alerts"]) if "email_alerts" in u.keys() else True}
 
     def list_users(self):
         out = []
