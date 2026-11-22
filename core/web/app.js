@@ -785,15 +785,15 @@ function customInput(f, v) {
   return `<div class="fld" data-f="custom.${esc(f.key)}">${f.type === 'bool' ? '<label>&nbsp;</label>' : `<label for="${id}">${esc(lab)}${f.required ? '<span class="req">*</span>' : ''}</label>`}${input}<div class="em"></div></div>`;
 }
 
-async function assetForm(a, done) {
+async function assetForm(a, done, preset = {}) {
   const cl = await cats(), edit = !!a;
   const cur = edit ? a.category_id : (AS.category || cl[0].id);
   const m = modal(`<h2>${edit ? t('assets.edit') : t('assets.add')}</h2><div class="sub">${edit ? `<span class="mono">${esc(a.tag)}</span>` : t('assets.add_sub')}</div><form id="af" novalidate><div class="fg">
     ${field('category_id', t('assets.category'), dd('category_id', cl.map(c => `<option value="${c.id}" ${cur == c.id ? 'selected' : ''}>${esc(nameOf(c))} (${esc(c.code)})</option>`).join('')), { req: true })}
-    ${field('tag', t('assets.tag'), inp('tag', edit ? a.tag : '', `dir="ltr" class="mono" autocomplete="off" placeholder="${esc(t('assets.tag_auto'))}"`), { hint: edit ? '' : t('assets.tag_hint') })}
+    ${field('tag', t('assets.tag'), inp('tag', edit ? a.tag : (preset.tag || ''), `dir="ltr" class="mono" autocomplete="off" placeholder="${esc(t('assets.tag_auto'))}"`), { hint: edit ? '' : t('assets.tag_hint') })}
     ${field('name', t('assets.name'), inp('name', edit ? a.name : ''), { req: true, full: true })}
     ${field('brand', t('assets.brand'), inp('brand', edit ? a.brand : ''))}${field('model', t('assets.model'), inp('model', edit ? a.model : ''))}
-    ${field('serial_no', t('assets.serial'), inp('serial_no', edit ? a.serial_no : '', 'dir="ltr" class="mono" autocomplete="off"'))}
+    ${field('serial_no', t('assets.serial'), inp('serial_no', edit ? a.serial_no : (preset.serial_no || ''), 'dir="ltr" class="mono" autocomplete="off"'))}
     ${field('condition', t('assets.condition'), dd('condition', condOpts(edit ? a.condition : 'new')))}
     ${field('location', t('assets.location'), inp('location', edit ? a.location : ''))}${field('supplier', t('assets.supplier'), inp('supplier', edit ? a.supplier : ''))}
     ${field('purchase_date', t('assets.purchase_date'), inp('purchase_date', edit ? a.purchase_date : '', 'type="date"'))}
@@ -1449,18 +1449,37 @@ function openScanner() {
   const close = m.close; m.close = () => { stop(); close(); };
   const msg = (text, kind = 'warn') => { const b = $('#scmsg', m); b.className = 'banner ' + kind; b.innerHTML = `${ic('warn', 18)}<div>${esc(text)}</div>`; b.hidden = false; };
   $('#scclose', m).onclick = () => m.close();
-  const found = async raw => {
-    if (busy) return; const tag = tagFromScan(raw);
-    if (!tag) { msg(t('scan.not_label')); return; }
-    busy = true; stop(); if (navigator.vibrate) navigator.vibrate(60);
-    m.close(); await openAssetByTag(tag);
+  const openFound = async id => { m.close(); if (curPage() !== 'assets') { history.replaceState(null, '', '#/assets'); await render(); } assetDetail(id, () => render()); };
+  // a code nobody has: offer to add the asset with it (as serial number, or as the asset tag if it looks like one)
+  const unknown = code => {
+    $('#scbox', m).hidden = true;
+    const asTag = /^[A-Za-z0-9][A-Za-z0-9\-_/.]{0,39}$/.test(code), canAdd = has('assets.manage');
+    const b = $('#scmsg', m); b.className = 'banner info'; b.hidden = false;
+    b.innerHTML = `${ic('qr', 18)}<div class="grow"><b>${esc(t('scan.unknown'))}</b><div class="mono" dir="ltr" style="word-break:break-all;margin:4px 0 10px">${esc(code)}</div>
+      ${canAdd ? `<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn pri sm" id="sc-add-sn">${ic('plus', 15)}${t('scan.add_serial')}</button>${asTag ? `<button type="button" class="btn sm" id="sc-add-tag">${t('scan.add_tag')}</button>` : ''}</div>` : `<div>${esc(t('scan.ask_admin'))}</div>`}
+      <button type="button" class="btn sm" id="sc-again" style="margin-top:8px">${ic('qr', 15)}${t('scan.again')}</button></div>`;
+    const add = preset => { m.close(); if (curPage() !== 'assets') go('#/assets'); assetForm(null, () => render(), preset); };
+    const sn = $('#sc-add-sn', m); if (sn) sn.onclick = () => add({ serial_no: code.slice(0, 80) });
+    const tg = $('#sc-add-tag', m); if (tg) tg.onclick = () => add({ tag: code.toUpperCase() });
+    $('#sc-again', m).onclick = () => { b.hidden = true; busy = false; startCam(); };
   };
-  $('#scf', m).onsubmit = e => { e.preventDefault(); const v = $('#f-sctag', m).value; if (v.trim()) found(v); };
-  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { msg(t('scan.need_https')); return; }
-  if (!('BarcodeDetector' in window)) { msg(t('scan.no_detector')); return; }
-  (async () => {
+  const found = async raw => {
+    const s = String(raw || '').trim();
+    if (busy || !s) return;
+    busy = true; stop(); if (navigator.vibrate) navigator.vibrate(60);
+    const ours = /#\/scan\?/.test(s) ? tagFromScan(s) : '';                     // a label printed by this system
+    if (ours) { m.close(); await openAssetByTag(ours); return; }
+    try { const r = await api('/api/assets/by-code?code=' + encodeURIComponent(s)); await openFound(r.id); }  // tag, serial, IMEI...
+    catch (e) { if (e && e.status === 404) unknown(s); else { busy = false; fail(e); } }
+  };
+  $('#scf', m).onsubmit = e => { e.preventDefault(); const v = $('#f-sctag', m).value; busy = false; if (v.trim()) found(v); };
+  const startCam = async () => {
+    if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { msg(t('scan.need_https')); return; }
+    if (!('BarcodeDetector' in window)) { msg(t('scan.no_detector')); return; }
     try {
-      const det = new window.BarcodeDetector({ formats: ['qr_code'] });
+      const want = ['qr_code', 'code_128', 'code_39', 'data_matrix', 'ean_13', 'ean_8', 'upc_a', 'itf'];   // QR labels + serial/IMEI barcodes
+      const have = window.BarcodeDetector.getSupportedFormats ? await window.BarcodeDetector.getSupportedFormats() : ['qr_code'];
+      const det = new window.BarcodeDetector({ formats: want.filter(f => have.includes(f)) });
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
       if (!m.isConnected) { stop(); return; }
       const v = $('#scv', m); v.srcObject = stream; $('#scbox', m).hidden = false; await v.play().catch(() => { });
@@ -1470,7 +1489,8 @@ function openScanner() {
         try { const codes = await det.detect(v); if (codes && codes.length) found(codes[0].rawValue); } catch (e) { }
       }, 250);
     } catch (e) { msg(e && e.name === 'NotAllowedError' ? t('scan.denied') : t('scan.no_camera')); }
-  })();
+  };
+  startCam();
 }
 /* "Install app" (Android Chrome/Edge offer it once the site qualifies; iPhone: Share -> Add to Home Screen) */
 window.addEventListener('beforeinstallprompt', e => {

@@ -1028,8 +1028,8 @@
  "set.digest_failed": "{n} e-mail(s) could not be sent ({sent} sent).",
  "scan.button": "Scan",
  "scan.title": "Scan an asset label",
- "scan.sub": "Point the camera at the QR code on the asset. The asset opens as soon as it is read.",
- "scan.type_tag": "Or type the asset tag",
+ "scan.sub": "Point the camera at the asset's QR code or barcode (our label, the serial number or IMEI barcode). The asset opens as soon as it is read.",
+ "scan.type_tag": "Or type the asset tag, serial number or IMEI",
  "scan.open": "Open",
  "scan.not_label": "This QR code is not an asset label from this system.",
  "scan.need_https": "The camera only works on a secure (https) address. Until then, type the tag below or scan with the phone's camera app.",
@@ -1037,5 +1037,10 @@
  "scan.denied": "Camera access was refused. Allow the camera for this site in the browser settings, then try again.",
  "scan.no_camera": "No camera could be started on this device.",
  "pwa.install": "Install app",
- "pwa.installed": "App installed - find it on your home screen"
+ "pwa.installed": "App installed - find it on your home screen",
+ "scan.unknown": "No asset has this code yet:",
+ "scan.add_serial": "Add new asset (code = serial number)",
+ "scan.add_tag": "Add new asset (code = asset tag)",
+ "scan.ask_admin": "Ask someone who can manage assets to add it.",
+ "scan.again": "Scan again"
 }

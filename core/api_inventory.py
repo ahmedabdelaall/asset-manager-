@@ -295,6 +295,24 @@ def assets_by_tag(ctx):
     return {"id": r["id"]}
 
 
+@route("GET", "/api/assets/by-code", perm="assets.view")
+def assets_by_code(ctx):
+    """A code read from any QR/barcode on the device (manufacturer label, old sticker, IMEI barcode...):
+    matches the asset tag, the serial number, or any custom field value (e.g. IMEI, phone number)."""
+    code = " ".join((ctx.query.get("code") or "").split())[:300]
+    if not code:
+        raise ApiError(404, "asset_not_found", "Asset not found")
+    db = ctx.db
+    for how, sql in (("tag", "SELECT id, tag FROM assets WHERE tag=? COLLATE NOCASE"),
+                     ("serial", "SELECT id, tag FROM assets WHERE serial_no=? COLLATE NOCASE"),
+                     ("field", "SELECT a.id, a.tag FROM assets a, json_each(a.custom) j WHERE CAST(j.value AS TEXT)=?1 "
+                               "OR (j.type IN ('integer','real') AND ?1 GLOB '[0-9]*' AND ?1 NOT GLOB '*[^0-9.]*' AND j.value = CAST(?1 AS REAL))")):
+        rows = db.query(sql + " LIMIT 2", (code,))
+        if rows:
+            return {"id": rows[0]["id"], "tag": rows[0]["tag"], "matched": how, "more": len(rows) > 1}
+    raise ApiError(404, "asset_not_found", "Asset not found")
+
+
 @route("GET", "/api/labels", perm="assets.view")
 def labels(ctx):
     ids = [int(x) for x in ctx.query.get("ids", "").split(",") if x.strip().isdigit()][:500]

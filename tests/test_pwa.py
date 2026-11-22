@@ -41,6 +41,20 @@ class TestInstallableApp(Base):
         if m["lang"] == "ar":                                           # only if the company endpoint accepted the change
             self.assertEqual((m["short_name"], m["dir"]), ("شركة أكمي", "rtl"))
 
+    def test_lookup_any_scanned_code(self):
+        from test_assets import LAPTOP
+        c = self.admin()
+        cat = c.post("/api/categories", dict(LAPTOP, fields=LAPTOP["fields"] + [{"key": "imei", "label_en": "IMEI", "type": "text"}]))[1]["id"]
+        aid = c.post("/api/assets", {"category_id": cat, "name": "T14", "serial_no": "PF4ABC12", "custom": {"ram_gb": 16, "imei": "866627084689374"}})[1]["id"]
+        tag = c.get("/api/assets/%d" % aid)[1]["tag"]
+        for code, how in ((tag.lower(), "tag"), ("pf4abc12", "serial"), ("866627084689374", "field"), ("  PF4ABC12 ", "serial")):
+            s, js, _ = c.get("/api/assets/by-code?code=" + code.replace(" ", "%20"))
+            self.assertEqual((s, js["id"], js["matched"]), (200, aid, how), code)
+        self.assertEqual(c.get("/api/assets/by-code?code=16")[1]["matched"], "field")     # numbers in custom fields match too
+        self.assertEqual(c.get("/api/assets/by-code?code=NOPE-123")[0], 404)
+        self.assertEqual(c.get("/api/assets/by-code?code=")[0], 404)
+        self.assertEqual(Client(self.env).get("/api/assets/by-code?code=PF4ABC12")[0], 401)   # signed-in users only
+
     def test_icon_is_a_valid_png(self):
         data = appicon.png(192, "#6D4AF2", "#2F6BF0")
         self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
