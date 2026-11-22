@@ -177,6 +177,27 @@ class TestAlertsSettingsEmail(InvBase):
             self.assertIn("Sender not owned", c.post("/api/settings/test-email", {"to": "x@acme.test"})[1]["detail"])
         self.assertFalse(c.get("/api/auth/me")[1]["user"]["email_alerts"])
 
+    def test_send_summary_now_explains_why_nothing_was_sent(self):
+        c = self.setup_inventory()
+        r = c.post("/api/settings/send-digest")[1]
+        self.assertEqual((r["status"], r["sent"]), ("email_off", 0))                     # alerts switched off
+        c.put("/api/settings", {"email_enabled": True, "smtp_host": "mail.acme.test", "smtp_from": "assets@acme.test", "smtp_port": 25, "smtp_security": "none"})
+        with mock.patch.object(notify, "_smtp_send") as send:
+            r = c.post("/api/settings/send-digest")[1]
+            self.assertEqual((r["status"], r["sent"], r["checked"], r["nothing"]), ("ok", 0, 1, 1))   # nothing to report
+            send.assert_not_called()
+            self.new_asset(c, warranty_until=D(2))
+            r = c.post("/api/settings/send-digest")[1]
+            self.assertEqual((r["sent"], r["nothing"]), (1, 0))
+            c.put("/api/auth/prefs", {"lang": "en", "theme": "light", "email_alerts": False})
+            r = c.post("/api/settings/send-digest")[1]
+            self.assertEqual((r["checked"], r["opted_out"]), (0, 1))                         # nobody can receive it
+        c.put("/api/auth/prefs", {"lang": "en", "theme": "light", "email_alerts": True})
+        import smtplib
+        with mock.patch.object(notify, "_smtp_send", side_effect=smtplib.SMTPAuthenticationError(535, b"bad")):
+            r = c.post("/api/settings/send-digest")[1]
+            self.assertEqual((r["failed"], r["error"]), (1, "smtp_auth"))
+
 
 class TestLabels(InvBase):
     def test_lookup_and_labels(self):

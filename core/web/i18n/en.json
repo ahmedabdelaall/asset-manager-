@@ -1016,5 +1016,14 @@
  "cat.unique": "Unique",
  "cat.unique_hint": "No two assets in this category may have the same value (e.g. phone number, IMEI).",
  "err.custom_value_taken": "Another asset ({tag}) already has this value.",
- "err.field_values_not_unique": "Cannot make \"{label}\" unique: {count} assets already share the value {value}. Fix them first."
+ "err.field_values_not_unique": "Cannot make \"{label}\" unique: {count} assets already share the value {value}. Fix them first.",
+ "set.digest_running": "Preparing today's summary…",
+ "set.digest_email_off": "Nothing was sent: \"Send e-mail alerts\" is switched off. Tick it above, then try again.",
+ "set.digest_sent_n": "Today's summary was sent to {n} person(s).",
+ "set.digest_nothing": "No e-mail was needed: nothing needs attention today for the {n} person(s) checked (no warranties ending, overdue returns, maintenance due or waiting requests).",
+ "set.digest_x_nothing": "{n} person(s) had nothing to report, so they got no e-mail.",
+ "set.digest_no_recipients": "Nobody can receive the summary: no active user has an e-mail address with e-mail alerts turned on.",
+ "set.digest_x_no_email": "{n} user(s) have no e-mail address.",
+ "set.digest_x_opted_out": "{n} user(s) turned e-mail alerts off in their preferences.",
+ "set.digest_failed": "{n} e-mail(s) could not be sent ({sent} sent)."
 }

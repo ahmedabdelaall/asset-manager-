@@ -276,26 +276,41 @@ def digest_for(db, inst, user, company_name, base_url):
 
 def run_digest(db, inst, force=False):
     """Send each subscribed user their alerts. Returns the number of e-mails sent."""
+    return digest_report(db, inst, force)["sent"]
+
+
+def digest_report(db, inst, force=False):
+    """Like run_digest, but says what happened to everyone, so "Send today's summary now" can explain a 0."""
     from . import company
     s = get_settings(db, inst, reveal=True)
+    r = {"status": "ok", "sent": 0, "checked": 0, "nothing": 0, "no_email": 0, "opted_out": 0, "failed": 0, "error": ""}
     if not s["email_enabled"] or not s["smtp_host"]:
-        return 0
+        return dict(r, status="email_off")
     if not force and _state(db, "digest_last") == today_iso():
-        return 0
+        return dict(r, status="already_sent")
     c = company.get(db) or {}
-    sent = 0
-    for u in db.query("SELECT * FROM users WHERE is_active=1 AND email_alerts=1 AND email <> ''"):
+    for u in db.query("SELECT * FROM users WHERE is_active=1"):
+        if not (u["email"] or "").strip():
+            r["no_email"] += 1
+            continue
+        if not u["email_alerts"]:
+            r["opted_out"] += 1
+            continue
+        r["checked"] += 1
         name = (c.get("name_ar") or c.get("name_en")) if (u["lang"] or "en") == "ar" else (c.get("name_en") or c.get("name_ar"))
         d = digest_for(db, inst, u, name or "", s["public_url"])
         if not d:
+            r["nothing"] += 1
             continue
         try:
             _smtp_send(s, formataddr((u["full_name"], u["email"])), *d)
-            sent += 1
+            r["sent"] += 1
         except Exception as e:
+            r["failed"] += 1
+            r["error"] = r["error"] or smtp_error(e).code
             log.error("Alert e-mail to %s failed: %s", u["username"], e)
     _state(db, "digest_last", today_iso())
-    return sent
+    return r
 
 
 class DigestScheduler(threading.Thread):

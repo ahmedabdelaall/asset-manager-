@@ -394,4 +394,4 @@ def settings_test(ctx):
 
 @route("POST", "/api/settings/send-digest", perm="company.manage")
 def settings_digest(ctx):
-    return {"sent": notify.run_digest(ctx.db, ctx.app.inst, force=True)}
+    return notify.digest_report(ctx.db, ctx.app.inst, force=True)

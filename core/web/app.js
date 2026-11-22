@@ -1667,7 +1667,22 @@ async function settingsCard(box) {
       else status('bad', 'warn', `<b>${esc(t('set.test_failed'))}</b><br>${esc(errText(err))}`);
     } finally { btn.disabled = false; }
   };
-  $('#set-digest', box).onclick = async () => { try { const r = await api('/api/settings/send-digest', { method: 'POST', body: {} }); toast(t('set.digest_sent', { n: r.sent })); } catch (err) { fail(err); } };
+  $('#set-digest', box).onclick = async () => {
+    const btn = $('#set-digest', box); btn.disabled = true; status('', '', ''); showErrors(box, null);
+    try {
+      await api('/api/settings', { method: 'PUT', body: body() });
+      status('warn', 'mail', esc(t('set.digest_running')));
+      const r = await api('/api/settings/send-digest', { method: 'POST', body: {} });
+      const extra = [r.no_email ? t('set.digest_x_no_email', { n: r.no_email }) : '', r.opted_out ? t('set.digest_x_opted_out', { n: r.opted_out }) : ''].filter(Boolean).map(esc).join('<br>');
+      const more = extra ? '<br><span style="font-size:12.5px">' + extra + '</span>' : '';
+      if (r.status === 'email_off') status('warn', 'warn', esc(t('set.digest_email_off')));
+      else if (r.failed) status('bad', 'warn', `<b>${esc(t('set.digest_failed', { n: r.failed, sent: r.sent }))}</b><br>${esc(errText({ code: r.error }))}`);
+      else if (r.sent) { status('good', 'check', esc(t('set.digest_sent_n', { n: r.sent })) + (r.nothing ? '<br>' + esc(t('set.digest_x_nothing', { n: r.nothing })) : '') + more); toast(t('set.digest_sent', { n: r.sent })); }
+      else if (!r.checked) status('warn', 'warn', esc(t('set.digest_no_recipients')) + more);
+      else status('warn', 'bell', esc(t('set.digest_nothing', { n: r.checked })) + more);
+    } catch (err) { if (showErrors(box, err)) status('', '', ''); else status('bad', 'warn', esc(errText(err))); }
+    finally { btn.disabled = false; }
+  };
 }
 
 /* ============ boot ============ */
