@@ -149,7 +149,8 @@ class TestHardening(InvBase):
         c = Client(self.env)
         s, _, r = c.get("/api/health")
         self.assertEqual(r.getheader("Cross-Origin-Opener-Policy"), "same-origin")
-        self.assertIn("camera=()", r.getheader("Permissions-Policy"))
+        self.assertIn("camera=(self)", r.getheader("Permissions-Policy"))      # own pages only: the QR scanner
+        self.assertIn("microphone=()", r.getheader("Permissions-Policy"))
         from core.server import make_handler
         self.assertTrue(0 < make_handler(self.env.app).timeout <= 120)                    # idle connections are dropped
 

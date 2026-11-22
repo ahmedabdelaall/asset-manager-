@@ -105,6 +105,7 @@ function applyBrand() {
   const b = S.brand; if (!b) return;
   const r = document.documentElement.style;
   r.setProperty('--brand', b.primary_color); r.setProperty('--brand2', b.accent_color);
+  const tc = document.querySelector('meta[name="theme-color"]'); if (tc && b.primary_color) tc.content = b.primary_color;   // phone status bar
 }
 const appName = () => S.brand ? (LANG === 'ar' ? S.brand.app_name_ar : S.brand.app_name_en) : 'Asset Manager';
 const companyName = () => S.brand ? (LANG === 'ar' ? (S.brand.name_ar || S.brand.name_en) : (S.brand.name_en || S.brand.name_ar)) : '';
@@ -339,6 +340,8 @@ function renderShell(page) {
 }
 function pageHead(title, sub, right = '') {
   $('#tophead').innerHTML = `<button class="chip" id="t-menu" aria-label="${t('nav.menu')}" aria-controls="side">${ic('list', 17)}</button><div style="min-width:0"><h1>${esc(title)}</h1>${sub ? `<p>${esc(sub)}</p>` : ''}</div><div class="sp"></div>${right}
+  ${S.installEvt ? `<button class="chip" id="t-install" title="${t('pwa.install')}">${ic('download', 17)}<span class="hide-sm">${t('pwa.install')}</span></button>` : ''}
+  ${has('assets.view') ? `<button class="chip" id="t-scan" title="${t('scan.button')}" aria-label="${t('scan.button')}">${ic('qr', 17)}<span class="hide-sm">${t('scan.button')}</span></button>` : ''}
   <div class="menu" id="bellwrap"><button class="chip" id="t-bell" title="${t('alert.title')}" aria-label="${t('alert.title')}">${ic('bell', 17)}<span class="bdg" id="bellc" hidden></span></button></div>
   <button class="chip" id="t-lang" aria-label="${t('common.language')}">${ic('globe', 17)}<span class="hide-sm">${LANG === 'ar' ? 'English' : 'العربية'}</span></button>
   <button class="chip" id="t-theme" title="${t('common.theme')}" aria-label="${t('common.theme')}">${ic(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', 17)}</button>
@@ -346,6 +349,8 @@ function pageHead(title, sub, right = '') {
   $('#t-menu').onclick = () => $('.app').classList.toggle('navopen');
   bindTools();
   $('#t-bell').onclick = openBell;
+  const sc = $('#t-scan'); if (sc) sc.onclick = openScanner;
+  const inst = $('#t-install'); if (inst) inst.onclick = installApp;
   if (S.alerts) { const c = $('#bellc'); c.textContent = S.alerts.total > 99 ? '99+' : S.alerts.total; c.hidden = !S.alerts.total; }
   refreshBell();
   $('#t-user').onclick = e => {
@@ -369,6 +374,7 @@ async function render() {
   if (h === 'receipt' && !(S.license && S.license.locked)) return renderReceipt(seq);
   if (h === 'labels' && !(S.license && S.license.locked)) return renderLabels(seq);
   if (h === 'scan' && !(S.license && S.license.locked)) return openScanned();
+  if (h === 'scanner' && !(S.license && S.license.locked)) { history.replaceState(null, '', '#/assets'); await render(); return openScanner(); }   // home-screen shortcut
   const page = curPage();
   const locked = S.license && S.license.locked;
   if (locked && page !== 'license' && page !== 'account') return go('#/license');
@@ -1419,6 +1425,69 @@ async function openScanned() {
   try { const r = await api('/api/assets/by-tag?tag=' + encodeURIComponent(tag)); history.replaceState(null, '', '#/assets'); await render(); assetDetail(r.id, () => render()); }
   catch (e) { history.replaceState(null, '', '#/assets'); await render(); toast(t('scan.not_found'), tag, 'err'); }
 }
+/* camera QR scanner (phones): reads an asset label and opens that asset. Uses the browser's built-in BarcodeDetector
+   (Android Chrome/Edge); elsewhere the person can type the tag, or scan with the phone's own camera app. */
+function tagFromScan(raw) {
+  const s = String(raw || '').trim();
+  const m = s.match(/#\/scan\?(?:.*&)?tag=([^&#]+)/);
+  if (m) { try { return decodeURIComponent(m[1]).toUpperCase(); } catch (e) { return ''; } }
+  return /^[A-Za-z0-9][A-Za-z0-9\-_/.]{0,39}$/.test(s) ? s.toUpperCase() : '';
+}
+async function openAssetByTag(tag) {
+  try { const r = await api('/api/assets/by-tag?tag=' + encodeURIComponent(tag)); if (curPage() !== 'assets') { history.replaceState(null, '', '#/assets'); await render(); } assetDetail(r.id, () => render()); return true; }
+  catch (e) { toast(t('scan.not_found'), tag, 'err'); return false; }
+}
+function openScanner() {
+  const m = modal(`<h2>${ic('qr', 20)} ${t('scan.title')}</h2><div class="sub">${t('scan.sub')}</div>
+    <div class="scanbox" id="scbox" hidden><video id="scv" playsinline muted autoplay></video><div class="scanframe" aria-hidden="true"></div></div>
+    <div id="scmsg" class="banner warn" style="margin:12px 0 0" hidden></div>
+    <form id="scf" novalidate style="margin-top:14px"><div class="fld" data-f="tag"><label for="f-sctag">${t('scan.type_tag')}</label>
+    <div style="display:flex;gap:8px"><input id="f-sctag" dir="ltr" class="mono" autocomplete="off" autocapitalize="characters" placeholder="LAP-00001" style="flex:1"><button class="btn pri" type="submit">${t('scan.open')}</button></div><div class="em"></div></div></form>
+    <div class="foot"><button class="btn" type="button" id="scclose">${t('common.close')}</button></div>`, 'sm');
+  let stream = null, timer = null, busy = false;
+  const stop = () => { if (timer) clearInterval(timer); timer = null; if (stream) stream.getTracks().forEach(tr => tr.stop()); stream = null; };
+  const close = m.close; m.close = () => { stop(); close(); };
+  const msg = (text, kind = 'warn') => { const b = $('#scmsg', m); b.className = 'banner ' + kind; b.innerHTML = `${ic('warn', 18)}<div>${esc(text)}</div>`; b.hidden = false; };
+  $('#scclose', m).onclick = () => m.close();
+  const found = async raw => {
+    if (busy) return; const tag = tagFromScan(raw);
+    if (!tag) { msg(t('scan.not_label')); return; }
+    busy = true; stop(); if (navigator.vibrate) navigator.vibrate(60);
+    m.close(); await openAssetByTag(tag);
+  };
+  $('#scf', m).onsubmit = e => { e.preventDefault(); const v = $('#f-sctag', m).value; if (v.trim()) found(v); };
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { msg(t('scan.need_https')); return; }
+  if (!('BarcodeDetector' in window)) { msg(t('scan.no_detector')); return; }
+  (async () => {
+    try {
+      const det = new window.BarcodeDetector({ formats: ['qr_code'] });
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      if (!m.isConnected) { stop(); return; }
+      const v = $('#scv', m); v.srcObject = stream; $('#scbox', m).hidden = false; await v.play().catch(() => { });
+      $('#f-sctag', m).blur();
+      timer = setInterval(async () => {
+        if (busy || v.readyState < 2) return;
+        try { const codes = await det.detect(v); if (codes && codes.length) found(codes[0].rawValue); } catch (e) { }
+      }, 250);
+    } catch (e) { msg(e && e.name === 'NotAllowedError' ? t('scan.denied') : t('scan.no_camera')); }
+  })();
+}
+/* "Install app" (Android Chrome/Edge offer it once the site qualifies; iPhone: Share -> Add to Home Screen) */
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); S.installEvt = e;
+  const anchor = $('#t-scan') || $('#bellwrap');
+  if (anchor && !$('#t-install')) {
+    anchor.insertAdjacentHTML('beforebegin', `<button class="chip" id="t-install" title="${t('pwa.install')}">${ic('download', 17)}<span class="hide-sm">${t('pwa.install')}</span></button>`);
+    $('#t-install').onclick = installApp;
+  }
+});
+window.addEventListener('appinstalled', () => { S.installEvt = null; const b = $('#t-install'); if (b) b.remove(); toast(t('pwa.installed')); });
+async function installApp() {
+  const e = S.installEvt; if (!e) return;
+  S.installEvt = null; e.prompt();
+  try { await e.userChoice; } catch (x) { }
+  const b = $('#t-install'); if (b) b.remove();
+}
 const labelUrl = (base, tag) => base.replace(/\/+$/, '') + '/#/scan?tag=' + encodeURIComponent(tag);
 async function renderLabels(seq) {
   const ids = new URLSearchParams(location.hash.split('?')[1] || '').get('ids') || '';
@@ -1689,6 +1758,7 @@ async function settingsCard(box) {
 (async function boot() {
   try {
     await loadDicts();
+    if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('/sw.js').catch(() => { });   // installable app
     S.brand = await api('/api/branding');
     try { const r = await api('/api/auth/me'); S.user = r.user; CSRF = r.csrf; S.license = r.license; } catch (e) { }
     applyBrand(); applyLang(); applyTheme();

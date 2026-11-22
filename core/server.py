@@ -173,7 +173,7 @@ def make_handler(app):
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Cross-Origin-Opener-Policy", "same-origin")
             self.send_header("Cross-Origin-Resource-Policy", "same-origin")
-            self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+            self.send_header("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=(), usb=()")   # camera: QR scanner
             self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
                              "script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
             if app.inst.config["https"]:
@@ -231,7 +231,8 @@ def make_handler(app):
                 u = urllib.parse.urlparse(self.path)
                 path = u.path
                 query = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
-                if method == "GET" and not path.startswith("/api/") and not path.startswith("/brand/"):
+                if method == "GET" and not path.startswith("/api/") and not path.startswith("/brand/") \
+                        and path != "/manifest.webmanifest" and not path.startswith("/app-icon-"):
                     return self._static(path)
                 if method != "GET":
                     origin = self.headers.get("Origin")
@@ -345,6 +346,36 @@ def branding(ctx):
     if b["access_requests"]:
         b["access_domains"] = access.allowed_domains(ctx.db, ctx.app.inst)
     return b
+
+
+@route("GET", "/manifest.webmanifest", public=True, lic=False)
+def web_manifest(ctx):
+    """Makes the app installable on phones ("Install app" / "Add to Home screen"), named and coloured per company."""
+    b = company.branding(ctx.db)
+    lang = b.get("default_language") or "en"
+    comp = (b.get("name_ar") if lang == "ar" else b.get("name_en")) or b.get("name_en") or ""
+    app_name = (b.get("app_name_ar") if lang == "ar" else b.get("app_name_en")) or "Asset Manager"
+    icons = [{"src": "/app-icon-%d.png" % s, "sizes": "%dx%d" % (s, s), "type": "image/png", "purpose": "any"} for s in (192, 512)]
+    icons.append({"src": "/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"})
+    m = {"name": ("%s %s" % (comp, app_name)).strip(), "short_name": (comp or app_name)[:24], "id": "/",
+         "start_url": "/#/dashboard", "scope": "/", "display": "standalone", "orientation": "any",
+         "lang": lang, "dir": "rtl" if lang == "ar" else "ltr",
+         "background_color": "#ffffff", "theme_color": b.get("primary_color") or "#6D4AF2", "icons": icons,
+         "shortcuts": [{"name": "Scan" if lang != "ar" else "مسح", "url": "/#/scanner",
+                        "icons": [{"src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png"}]}]}
+    return Raw(json.dumps(m, ensure_ascii=False).encode("utf-8"), "application/manifest+json; charset=utf-8",
+               headers={"Cache-Control": "no-cache"})
+
+
+@route("GET", "/app-icon-<int:size>.png", public=True, lic=False)
+def app_icon(ctx):
+    from . import appicon
+    size = int(ctx.params["size"])
+    if size not in appicon.SIZES:
+        raise ApiError(404, "not_found", "No such icon")
+    b = company.branding(ctx.db)
+    return Raw(appicon.png(size, b.get("primary_color"), b.get("accent_color")), "image/png",
+               headers={"Cache-Control": "public, max-age=86400"})
 
 
 @route("GET", "/brand/logo", public=True, lic=False)
