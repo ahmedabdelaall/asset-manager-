@@ -324,7 +324,7 @@ const skeleton = () => `<div class="skwrap" aria-busy="true" aria-label="${esc(t
 function renderShell(page) {
   const locked = S.license && S.license.locked;
   const order = ['dashboard', 'assets', 'assignments', 'employees', 'categories', 'maintenance', 'requests', 'reports', 'users', 'roles', 'company', 'license', 'audit', 'backups', 'account'];
-  const items = NAV.filter(([k, , perm]) => canSee(perm) && !(k === 'license' && licOff()) && (!locked || k === 'license' || k === 'account')).sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
+  const items = NAV.filter(([k, , perm]) => canSee(perm) && !(k === 'license' && licOff()) && !(k === 'requests' && S.brand && S.brand.asset_requests === false) && (!locked || k === 'license' || k === 'account')).sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
   let grp = null;
   const nav = items.map(([k, i]) => {
     const g = NAV_GROUP[k] || null, head = g !== grp && g ? (g === 'me' ? '<div class="grp sep"></div>' : `<div class="grp">${t('navg.' + g)}</div>`) : '';
@@ -371,6 +371,7 @@ async function render() {
   const locked = S.license && S.license.locked;
   if (locked && page !== 'license' && page !== 'account') return go('#/license');
   if (page === 'license' && licOff()) return go('#/dashboard');
+  if (page === 'requests' && S.brand && S.brand.asset_requests === false) return go('#/dashboard');
   if (!canSee(NAV.find(n => n[0] === page)[2])) { renderShell(page); pageHead(t('err.forbidden_title'), ''); $('#page').innerHTML = `<div class="card"><div class="empty">${ic('lock', 36)}<b>${t('err.forbidden_title')}</b>${t('err.forbidden_page')}</div></div>`; return; }
   renderShell(page);
   try { await PAGES[page]($('#page'), seq); } catch (e) { if (seq === renderSeq && $('#page')) $('#page').innerHTML = `<div class="banner bad">${ic('warn', 20)}<div class="grow">${esc(errText(e))}</div></div>`; }
@@ -567,8 +568,9 @@ async function pCompany(el) {
     ${field('receipt_terms_ar', t('company.terms_ar'), `<textarea id="f-receipt_terms_ar" class="txt" dir="rtl" placeholder="${esc(DICT.ar['rcpt.terms_default_handover'] || '')}" ${manage ? '' : 'disabled'}>${esc(c.receipt_terms_ar || '')}</textarea>`, { full: true })}
     </div>${manage ? `<div class="toolbar" style="margin:20px 0 0"><button class="btn pri" type="submit">${t('common.save')}</button></div>` : ''}</form>
   <div class="s4" style="display:flex;flex-direction:column;gap:18px"><div class="card"><h3>${t('company.logo')}</h3><div class="sub">${t('company.logo_sub')}</div><div class="preview" id="pv" style="margin-bottom:14px">${logoHTML()}<div><b>${esc(companyName())}</b><div style="opacity:.85;font-size:12.5px">${esc(appName())}</div></div></div>
-  ${manage ? `<div class="toolbar" style="margin:0"><label class="btn sm" for="logo">${ic('upload', 15)}${t('company.upload')}</label><input type="file" id="logo" accept="image/png,image/jpeg,image/webp" hidden>${c.logo ? `<button class="btn sm dng" id="rmlogo">${ic('trash', 15)}${t('common.remove')}</button>` : ''}</div>` : ''}</div></div><div class="card s12" id="setcard"></div></div>`;
+  ${manage ? `<div class="toolbar" style="margin:0"><label class="btn sm" for="logo">${ic('upload', 15)}${t('company.upload')}</label><input type="file" id="logo" accept="image/png,image/jpeg,image/webp" hidden>${c.logo ? `<button class="btn sm dng" id="rmlogo">${ic('trash', 15)}${t('common.remove')}</button>` : ''}</div>` : ''}</div></div><div class="card s12" id="setcard"></div><div class="card s12" id="rcptcard"></div></div>`;
   settingsCard($('#setcard'));
+  receiptCard($('#rcptcard'));
   const sync = (a, b) => { $('#' + a).oninput = e => { $('#f-' + b).value = e.target.value.toUpperCase(); pv(); }; $('#f-' + b).oninput = e => { if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) { $('#' + a).value = e.target.value; pv(); } }; };
   const pv = () => { $('#pv').style.background = `linear-gradient(135deg,${$('#pc').value},${$('#ac').value})`; };
   sync('pc', 'primary_color'); sync('ac', 'accent_color'); pv();
@@ -1150,37 +1152,68 @@ async function renderReceipt(seq) {
   try { r = await api(`/api/assignments/${+q.get('id')}/receipt?kind=${kind}`); }
   catch (e) { $('#root').innerHTML = `<div class="wrap"><div class="banner bad">${ic('warn', 20)}<div class="grow">${esc(errText(e))}</div></div></div>`; return; }
   if (seq !== renderSeq) return;
-  let RL = renderReceipt.lang || LANG;
+  let RL = renderReceipt.lang || LANG, FREE = false;
   const draw = () => {
     const tr = (k, v) => { let s = DICT[RL][k] ?? DICT.en[k] ?? k; if (v) for (const x in v) s = s.split('{' + x + '}').join(v[x]); return s; };
     const nm = (o, b = 'name') => (RL === 'ar' ? (o[b + '_ar'] || o[b + '_en']) : (o[b + '_en'] || o[b + '_ar'])) || '';
     const dt = (iso, time) => { if (!iso) return '—'; const d = new Date(iso.length === 10 ? iso + 'T00:00:00Z' : iso); return d.toLocaleString(RL === 'ar' ? 'ar-u-nu-latn' : 'en-GB', time ? { dateStyle: 'long', timeStyle: 'short' } : { dateStyle: 'long', timeZone: 'UTC' }); };
     const a = r.asset, e = r.employee, g = r.assignment, c = r.company, ho = kind === 'handover';
+    // layout chosen under Company & branding -> Receipts: own titles/labels/footer, rows to hide
+    const L = r.layout || {}, hid = new Set(L.hide || []);
+    const lt = (k, def) => (L[k + '_' + RL] || '').trim() || tr(def);
     const row = (k, v) => v === '' || v === null || v === undefined ? '' : `<tr><th>${esc(k)}</th><td>${v}</td></tr>`;
-    const cf = a.fields.map(f => { const v = a.custom[f.key]; if (v === undefined || v === '' || v === false) return ''; return row(nm(f, 'label'), esc(f.type === 'bool' ? tr('common.yes') : f.type === 'date' ? dt(v) : v)); }).join('');
+    const rowk = (key, k, v) => hid.has(key) ? '' : row(k, v);
+    const cf = hid.has('custom') ? '' : a.fields.map(f => { const v = a.custom[f.key]; if (v === undefined || v === '' || v === false) return ''; return row(nm(f, 'label'), esc(f.type === 'bool' ? tr('common.yes') : f.type === 'date' ? dt(v) : v)); }).join('');
     const terms = (RL === 'ar' ? c.terms_ar || c.terms_en : c.terms_en || c.terms_ar) || tr('rcpt.terms_default_' + kind);
+    const foot = (L['footer_' + RL] || '').trim();
+    const nid = e.national_id ? `<span class="mono" dir="ltr">${esc(e.national_id)}</span>` : '<span class="rblank"></span>';
     const brand = S.brand && S.brand.logo ? `<img src="${esc(S.brand.logo)}" alt="">` : `<div class="rl">${esc((nm(c) || 'A').charAt(0))}</div>`;
     $('#root').innerHTML = `<div class="rbar noprint"><button class="btn pri sm" id="r-print">${ic('printer', 15)}${t('rcpt.print')}</button>
       <div class="seg" id="r-lang"><button data-l="ar" class="${RL === 'ar' ? 'on' : ''}">العربية</button><button data-l="en" class="${RL === 'en' ? 'on' : ''}">English</button></div>
-      ${has('assignments.manage') ? `<label class="btn sm">${ic('upload', 15)}${t('rcpt.attach')}<input type="file" id="r-file" hidden accept=".pdf,.png,.jpg,.jpeg,.webp"></label>` : ''}
+      <button class="btn sm ${FREE ? 'pri' : ''}" id="r-free" aria-pressed="${FREE}">${ic('edit', 15)}${t(FREE ? 'rcpt.free_done' : 'rcpt.free')}</button>
+      ${has('assignments.manage') ? `<button class="btn sm" id="r-edit">${ic('edit', 15)}${t('rcpt.edit_handover')}</button><label class="btn sm">${ic('upload', 15)}${t('rcpt.attach')}<input type="file" id="r-file" hidden accept=".pdf,.png,.jpg,.jpeg,.webp"></label>` : ''}
       <div class="sp"></div><span class="mut" style="font-size:12.5px">${t('rcpt.print_hint')}</span></div>
+      ${FREE ? `<div class="rbar noprint" style="padding-top:0"><div class="banner info" style="margin:0;flex:1">${ic('edit', 18)}<div class="grow">${esc(t('rcpt.free_hint'))}</div></div></div>` : ''}
       ${r.signed_copies.length ? `<div class="rbar noprint" style="padding-top:0">${ic('check', 16)} ${t('rcpt.signed')}: ${r.signed_copies.map(d => `<a href="/api/documents/${d.id}/file?inline=1" target="_blank" rel="noopener">${esc(d.filename)}</a>`).join(' · ')}</div>` : ''}
-      <div class="rcpt" dir="${RL === 'ar' ? 'rtl' : 'ltr'}" lang="${RL}">
-        <div class="rhead"><div class="rbrand">${brand}<div><b>${esc(nm(c))}</b></div></div><div class="rtitle"><h1>${tr('rcpt.title_' + kind)}</h1><div class="mono">${esc(r.number || '—')}</div><div>${esc(dt(ho ? g.assigned_at : g.returned_at, true))}</div></div></div>
-        <h3>${tr('rcpt.employee')}</h3><table class="rt">${row(tr('emp.name'), esc(nm(e, 'full_name')))}${row(tr('emp.no'), `<span class="mono">${esc(e.emp_no)}</span>`)}${row(tr('emp.national_id'), e.national_id ? `<span class="mono" dir="ltr">${esc(e.national_id)}</span>` : '<span class="rblank"></span>')}${row(tr('emp.department'), e.dept_en ? esc(nm(e, 'dept')) : '')}${row(tr('emp.job'), esc(e.job_title))}</table>
-        <h3>${tr('rcpt.asset')}</h3><table class="rt">${row(tr('assets.tag'), `<span class="mono">${esc(a.tag)}</span>`)}${row(tr('assets.name'), esc(a.name))}${row(tr('assets.category'), esc(nm(a, 'cat')))}${row(tr('assets.brand') + ' / ' + tr('assets.model'), esc([a.brand, a.model].filter(Boolean).join(' / ')))}${row(tr('assets.serial'), a.serial_no ? `<span class="mono">${esc(a.serial_no)}</span>` : '')}${cf}
-          ${row(tr(ho ? 'asg.condition_out' : 'asg.condition_in'), esc(tr('cond.' + (ho ? g.condition_out : g.condition_in))))}${ho ? row(tr('asg.expected_return'), g.expected_return ? esc(dt(g.expected_return)) : '') : row(tr('asg.assigned_on'), esc(dt(g.assigned_at)))}${row(tr('asg.notes'), esc(ho ? g.notes_out : g.notes_in))}</table>
+      <div class="rcpt${FREE ? ' editing' : ''}" dir="${RL === 'ar' ? 'rtl' : 'ltr'}" lang="${RL}" ${FREE ? 'contenteditable="true" spellcheck="false"' : ''}>
+        <div class="rhead"><div class="rbrand">${brand}<div><b>${esc(nm(c))}</b></div></div><div class="rtitle"><h1>${esc(lt('title_' + kind, 'rcpt.title_' + kind))}</h1><div class="mono">${esc(r.number || '—')}</div><div>${esc(dt(ho ? g.assigned_at : g.returned_at, true))}</div></div></div>
+        <h3>${tr('rcpt.employee')}</h3><table class="rt">${row(tr('emp.name'), esc(nm(e, 'full_name')))}${rowk('emp_no', tr('emp.no'), `<span class="mono">${esc(e.emp_no)}</span>`)}${rowk('national_id', tr('emp.national_id'), nid)}${rowk('department', tr('emp.department'), e.dept_en ? esc(nm(e, 'dept')) : '')}${rowk('job', tr('emp.job'), esc(e.job_title))}</table>
+        <h3>${tr('rcpt.asset')}</h3><table class="rt">${row(tr('assets.tag'), `<span class="mono">${esc(a.tag)}</span>`)}${row(tr('assets.name'), esc(a.name))}${rowk('category', tr('assets.category'), esc(nm(a, 'cat')))}${rowk('brand_model', tr('assets.brand') + ' / ' + tr('assets.model'), esc([a.brand, a.model].filter(Boolean).join(' / ')))}${rowk('serial', tr('assets.serial'), a.serial_no ? `<span class="mono">${esc(a.serial_no)}</span>` : '')}${cf}
+          ${rowk('condition', tr(ho ? 'asg.condition_out' : 'asg.condition_in'), esc(tr('cond.' + (ho ? g.condition_out : g.condition_in))))}${ho ? rowk('expected_return', tr('asg.expected_return'), g.expected_return ? esc(dt(g.expected_return)) : '') : row(tr('asg.assigned_on'), esc(dt(g.assigned_at)))}${rowk('notes', tr('asg.notes'), esc(ho ? g.notes_out : g.notes_in))}</table>
         <h3>${tr('rcpt.terms')}</h3><div class="rterms">${esc(terms)}</div>
-        <div class="rsig"><div><div class="lbl">${tr(ho ? 'rcpt.sig_received_emp' : 'rcpt.sig_returned_emp')}</div><b>${esc(nm(e, 'full_name'))}</b><div class="lbl rnid">${tr('emp.national_id')}: ${e.national_id ? `<span class="mono" dir="ltr">${esc(e.national_id)}</span>` : '<span class="rblank"></span>'}</div><div class="line"></div><div class="lbl">${tr('rcpt.signature')} / ${tr('rcpt.date')}</div></div>
-          <div><div class="lbl">${tr(ho ? 'rcpt.sig_handed_by' : 'rcpt.sig_received_by')}</div><b class="rname">${tr('rcpt.name')}: <span class="rblank"></span></b><div class="lbl rnid" aria-hidden="true" style="visibility:hidden">&nbsp;</div><div class="line"></div><div class="lbl">${tr('rcpt.signature')} / ${tr('rcpt.date')}</div></div></div>
+        ${foot ? `<div class="rnote">${esc(foot)}</div>` : ''}
+        <div class="rsig"><div><div class="lbl">${esc(lt(ho ? 'sig_emp_handover' : 'sig_emp_return', ho ? 'rcpt.sig_received_emp' : 'rcpt.sig_returned_emp'))}</div><b>${esc(nm(e, 'full_name'))}</b>${hid.has('sig_national_id') ? '' : `<div class="lbl rnid">${tr('emp.national_id')}: ${nid}</div>`}<div class="line"></div><div class="lbl">${tr('rcpt.signature')} / ${tr('rcpt.date')}</div></div>
+          <div><div class="lbl">${esc(lt(ho ? 'sig_staff_handover' : 'sig_staff_return', ho ? 'rcpt.sig_handed_by' : 'rcpt.sig_received_by'))}</div><b class="rname">${tr('rcpt.name')}: <span class="rblank"></span></b>${hid.has('sig_national_id') ? '' : '<div class="lbl rnid" aria-hidden="true" style="visibility:hidden">&nbsp;</div>'}<div class="line"></div><div class="lbl">${tr('rcpt.signature')} / ${tr('rcpt.date')}</div></div></div>
         <div class="rfoot"><span class="mono">${esc(r.number || '')}</span><span>${esc(tr('rcpt.printed', { d: dt(new Date().toISOString(), true) }))}</span></div>
       </div>`;
     document.title = (r.number || '') + ' — ' + appName();
     $('#r-print').onclick = () => window.print();
     $$('#r-lang button').forEach(b => b.onclick = () => { RL = renderReceipt.lang = b.dataset.l; draw(); });
+    // "Edit before printing": any text can be changed for this one print; nothing is saved
+    $('#r-free').onclick = () => { FREE = !FREE; draw(); if (FREE) { const h = $('.rcpt h1'); if (h) h.focus(); } };
+    const ed = $('#r-edit'); if (ed) ed.onclick = () => handoverForm(g, async () => { r = await api(`/api/assignments/${g.id}/receipt?kind=${kind}`); draw(); });
     const fi = $('#r-file'); if (fi) fi.onchange = async () => { if (await uploadFiles('assignment', g.id, [...fi.files])) { r = await api(`/api/assignments/${g.id}/receipt?kind=${kind}`); draw(); } };
   };
   draw();
+}
+
+/* correct a saved handover (wrong date, condition, notes); receipt numbers stay the same, every change is audited */
+function handoverForm(g, done) {
+  const back = !!g.returned_at;
+  const m = modal(`<h2>${t('rcpt.edit_handover')}</h2><div class="sub">${esc(t('rcpt.edit_sub', { n: g.receipt_out_no || '' }))}</div><form id="hof" novalidate><div class="fg">
+    ${field('assigned_on', t('asg.assigned_on'), inp('assigned_on', (g.assigned_at || '').slice(0, 10), `type="date" max="${today()}"`), { req: true })}
+    ${field('expected_return', t('asg.expected_return'), inp('expected_return', g.expected_return || '', 'type="date"'))}
+    ${field('condition_out', t('asg.condition_out'), dd('condition_out', condOpts(g.condition_out)))}<div></div>
+    ${field('notes_out', t('asg.notes'), txa('notes_out', g.notes_out || ''), { full: true })}
+    ${back ? `${field('returned_on', t('asg.returned_on'), inp('returned_on', (g.returned_at || '').slice(0, 10), `type="date" max="${today()}"`), { req: true })}
+    ${field('condition_in', t('asg.condition_in'), dd('condition_in', condOpts(g.condition_in || 'good')))}
+    ${field('notes_in', t('rcpt.notes_return'), txa('notes_in', g.notes_in || ''), { full: true })}` : ''}
+    </div>${footBtns()}</form>`);
+  bindCancel(m);
+  bindSubmit(m, $('#hof', m), async () => {
+    const body = {}; ['assigned_on', 'expected_return', 'condition_out', 'notes_out'].concat(back ? ['returned_on', 'condition_in', 'notes_in'] : []).forEach(k => body[k] = fv(m, k));
+    await api('/api/assignments/' + g.id, { method: 'PUT', body }); toast(t('toast.saved')); m.close(); done && done();
+  });
 }
 
 /* ============ phase 4: charts ============ */
@@ -1717,6 +1750,31 @@ function rejectForm(r, done) {
   bindSubmit(m, $('#rf2', m), async () => { await api(`/api/requests/${r.id}/reject`, { method: 'POST', body: { note: fv(m, 'note') } }); toast(t('req.rejected')); m.close(); done && done(); refreshBell(); });
 }
 
+/* ============ receipt layout (Company page): own titles, labels, footer; rows to show ============ */
+const RCPT_TEXTS = [['title_handover', 'rcpt.title_handover'], ['title_return', 'rcpt.title_return'], ['sig_emp_handover', 'rcpt.sig_received_emp'],
+['sig_staff_handover', 'rcpt.sig_handed_by'], ['sig_emp_return', 'rcpt.sig_returned_emp'], ['sig_staff_return', 'rcpt.sig_received_by']];
+const RCPT_ROWS = ['emp_no', 'national_id', 'department', 'job', 'category', 'brand_model', 'serial', 'custom', 'condition', 'expected_return', 'notes', 'sig_national_id'];
+async function receiptCard(box) {
+  const manage = has('company.manage');
+  let s; try { s = await api('/api/settings'); } catch (e) { box.remove(); return; }
+  const L = s.receipt || {}, hid = new Set(L.hide || []), dis = manage ? '' : ' disabled';
+  const pair = (k, def) => `${field(k + '_en', t('rl.' + k) + ' (EN)', inp(k + '_en', L[k + '_en'] || '', `dir="ltr" maxlength="120" placeholder="${esc(DICT.en[def] || '')}"` + dis))}${field(k + '_ar', t('rl.' + k) + ' (ع)', inp(k + '_ar', L[k + '_ar'] || '', `dir="rtl" maxlength="120" placeholder="${esc(DICT.ar[def] || '')}"` + dis))}`;
+  box.innerHTML = `<h3>${ic('printer', 16)} ${t('rl.title')}</h3><div class="sub">${t('rl.sub')}</div><form id="rlf" novalidate><div class="fg">
+    ${RCPT_TEXTS.map(([k, d]) => pair(k, d)).join('')}
+    ${field('footer_en', t('rl.footer') + ' (EN)', `<textarea id="f-footer_en" class="txt" dir="ltr" maxlength="1000"${dis}>${esc(L.footer_en || '')}</textarea>`, { hint: t('rl.footer_hint') })}
+    ${field('footer_ar', t('rl.footer') + ' (ع)', `<textarea id="f-footer_ar" class="txt" dir="rtl" maxlength="1000"${dis}>${esc(L.footer_ar || '')}</textarea>`)}</div>
+    <div class="sect"><h4>${t('rl.rows')}</h4><div class="mut" style="font-size:13px;margin:-4px 0 10px">${t('rl.rows_sub')}</div>
+    <div class="rlrows">${RCPT_ROWS.map(r => `<label class="cb"><input type="checkbox" data-row="${r}" ${hid.has(r) ? '' : 'checked'}${dis}> ${t('rl.row_' + r)}</label>`).join('')}</div></div>
+    <div class="mut" style="font-size:12.5px;margin-top:12px">${t('rl.terms_note')}</div>
+    ${manage ? `<div class="toolbar" style="margin:16px 0 0"><button class="btn pri" type="submit">${t('common.save')}</button></div>` : ''}</form>`;
+  if (!manage) return;
+  $('#rlf', box).onsubmit = async e => {
+    e.preventDefault(); const body = { hide: $$('[data-row]', box).filter(c => !c.checked).map(c => c.dataset.row) };
+    RCPT_TEXTS.map(x => x[0]).concat(['footer']).forEach(k => ['en', 'ar'].forEach(l => body[k + '_' + l] = fv(box, k + '_' + l)));
+    try { await api('/api/settings/receipt', { method: 'PUT', body }); toast(t('toast.saved')); } catch (err) { if (!showErrors(box, err)) fail(err); }
+  };
+}
+
 /* ============ phase 6: alert & e-mail settings (Company page) ============ */
 async function settingsCard(box) {
   const manage = has('company.manage');
@@ -1729,6 +1787,7 @@ async function settingsCard(box) {
     ${field('alert_maintenance_days', t('set.maintenance_days'), inp('alert_maintenance_days', s.alert_maintenance_days, 'type="number" min="0" max="90" dir="ltr"' + dis))}
     <div class="fld full"><label class="cb"><input type="checkbox" id="f-access_requests_enabled" ${s.access_requests_enabled ? 'checked' : ''}${dis}> ${ic('user', 16)} ${t('set.access_requests')}</label><div class="hint">${t('set.access_requests_hint')}</div></div>
     ${field('access_allowed_domains', t('set.domains'), inp('access_allowed_domains', (s.access_allowed_domains || []).join(', '), 'dir="ltr" autocomplete="off" autocapitalize="off" placeholder="mycompany.com, mycompany.com.eg"' + dis), { full: true, hint: t('set.domains_hint') })}
+    <div class="fld full"><label class="cb"><input type="checkbox" id="f-asset_requests_enabled" ${s.asset_requests_enabled ? 'checked' : ''}${dis}> ${ic('inbox', 16)} ${t('set.asset_requests')}</label><div class="hint">${t('set.asset_requests_hint')}</div></div>
     <div class="fld full"><label class="cb"><input type="checkbox" id="f-email_enabled" ${s.email_enabled ? 'checked' : ''}${dis}> ${ic('mail', 16)} ${t('set.email_enabled')}</label><div class="hint">${t('set.email_hint')}</div></div>
     ${field('smtp_host', t('set.smtp_host'), inp('smtp_host', s.smtp_host, 'dir="ltr" placeholder="smtp.office365.com"' + dis))}
     ${field('smtp_port', t('set.smtp_port'), inp('smtp_port', s.smtp_port, 'type="number" dir="ltr"' + dis))}
@@ -1739,8 +1798,8 @@ async function settingsCard(box) {
     ${field('smtp_from', t('set.smtp_from'), inp('smtp_from', s.smtp_from, 'dir="ltr" placeholder="assets@mycompany.com"' + dis), { full: true })}
     </div>${manage ? `<div class="toolbar" style="margin:20px 0 0"><button class="btn pri" type="submit">${t('common.save')}</button><div class="sp"></div><button class="btn sm" type="button" id="set-test">${ic('mail', 15)}${t('set.test')}</button><button class="btn sm" type="button" id="set-digest">${t('set.digest_now')}</button></div><div id="set-status" role="status" aria-live="polite"></div>` : ''}</form>`;
   if (!manage) return;
-  const body = () => { const b = {}; ['public_url', 'alert_warranty_days', 'alert_maintenance_days', 'smtp_host', 'smtp_port', 'smtp_security', 'digest_hour', 'smtp_user', 'smtp_password', 'smtp_from', 'access_allowed_domains'].forEach(k => b[k] = fv(box, k)); b.email_enabled = $('#f-email_enabled', box).checked; b.access_requests_enabled = $('#f-access_requests_enabled', box).checked; return b; };
-  $('#setf', box).onsubmit = async e => { e.preventDefault(); try { await api('/api/settings', { method: 'PUT', body: body() }); toast(t('toast.saved')); settingsCard(box); api('/api/branding').then(b => { S.brand = b; }).catch(() => { }); } catch (err) { if (!showErrors(box, err)) fail(err); } };
+  const body = () => { const b = {}; ['public_url', 'alert_warranty_days', 'alert_maintenance_days', 'smtp_host', 'smtp_port', 'smtp_security', 'digest_hour', 'smtp_user', 'smtp_password', 'smtp_from', 'access_allowed_domains'].forEach(k => b[k] = fv(box, k)); b.email_enabled = $('#f-email_enabled', box).checked; b.access_requests_enabled = $('#f-access_requests_enabled', box).checked; b.asset_requests_enabled = $('#f-asset_requests_enabled', box).checked; return b; };
+  $('#setf', box).onsubmit = async e => { e.preventDefault(); try { await api('/api/settings', { method: 'PUT', body: body() }); toast(t('toast.saved')); settingsCard(box); api('/api/branding').then(b => { const re = S.brand && S.brand.asset_requests !== b.asset_requests; S.brand = b; if (re) render(); }).catch(() => { }); } catch (err) { if (!showErrors(box, err)) fail(err); } };
   // the test can take up to ~20 s when the server does not answer, so the result stays on screen (not only a toast)
   const status = (kind, icon, html) => { $('#set-status', box).innerHTML = kind ? `<div class="banner ${kind}" style="margin:14px 0 0">${ic(icon, 18)}<div>${html}</div></div>` : ''; };
   $('#set-test', box).onclick = async () => {

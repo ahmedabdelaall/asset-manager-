@@ -169,7 +169,15 @@ def assignments_receipt(ctx):
     kind = ctx.query.get("kind", "handover")
     if kind not in ("handover", "return"):
         raise ApiError(400, "bad_request", "Bad request")
-    return inv.receipt(ctx.db, _id(ctx), kind, inv.can_see_national_id(ctx.db, ctx.user))
+    r = inv.receipt(ctx.db, _id(ctx), kind, inv.can_see_national_id(ctx.db, ctx.user))
+    r["layout"] = notify.get_settings(ctx.db, ctx.app.inst).get("receipt") or {}
+    return r
+
+
+@route("PUT", "/api/assignments/<int:id>", perm="assignments.manage")
+def assignments_update(ctx):
+    inv.update_assignment(ctx, _id(ctx), ctx.json())
+    return {}
 
 
 # ---------------------------------------------------------------- documents (permission depends on what they are attached to)
@@ -356,6 +364,8 @@ def requests_list(ctx):
 
 @route("POST", "/api/requests", perm="requests.create")
 def requests_create(ctx):
+    if not notify.get_settings(ctx.db, ctx.app.inst)["asset_requests_enabled"]:
+        raise ApiError(409, "requests_off", "Asset requests are switched off")
     return 201, {"id": ops.create_request(ctx, ctx.json())}
 
 
@@ -391,6 +401,11 @@ def requests_cancel(ctx):
 @route("GET", "/api/alerts")
 def alerts_get(ctx):
     return notify.alerts(ctx.db, ctx.app.inst, ctx.user)
+
+
+@route("PUT", "/api/settings/receipt", perm="company.manage")
+def settings_receipt(ctx):
+    return notify.save_receipt(ctx, ctx.json())
 
 
 @route("GET", "/api/settings", perm="company.view")

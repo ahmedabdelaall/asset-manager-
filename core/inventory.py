@@ -649,6 +649,54 @@ def return_asset(ctx, aid, d, at=None):
                                                   "condition": condition, "receipt": rno})
 
 
+def update_assignment(ctx, gid, d):
+    """Correct a handover after it was saved (wrong date, condition or notes). Receipt numbers never change.
+    Dates must stay in order: previous return <= handover <= return <= next handover, and never in the future."""
+    db = ctx.db
+    with db.tx():
+        g = db.one("SELECT * FROM assignments WHERE id=?", (gid,))
+        if g is None:
+            raise ApiError(404, "assignment_not_found", "Assignment not found")
+        new = {}
+        if d.get("assigned_on"):
+            day = date_field(d, "assigned_on")
+            new["assigned_at"] = g["assigned_at"] if day == g["assigned_at"][:10] else _event_time(day)
+        if "expected_return" in d:
+            new["expected_return"] = date_field(d, "expected_return")
+        if "condition_out" in d:
+            new["condition_out"] = choice(d, "condition_out", CONDITIONS, g["condition_out"])
+        if "notes_out" in d:
+            new["notes_out"] = text(d, "notes_out", maxlen=1000, required=False)
+        if g["returned_at"]:
+            if d.get("returned_on"):
+                day = date_field(d, "returned_on")
+                new["returned_at"] = g["returned_at"] if day == g["returned_at"][:10] else _event_time(day)
+            if "condition_in" in d:
+                new["condition_in"] = choice(d, "condition_in", CONDITIONS, g["condition_in"] or "good")
+            if "notes_in" in d:
+                new["notes_in"] = text(d, "notes_in", maxlen=1000, required=False)
+        elif any(k in d and d[k] for k in ("returned_on", "condition_in", "notes_in")):
+            raise ApiError(409, "asset_not_returned", "This handover has not been returned yet", field="returned_on")
+        at, back = new.get("assigned_at", g["assigned_at"]), new.get("returned_at", g["returned_at"])
+        prev = db.one("SELECT MAX(returned_at) t FROM assignments WHERE asset_id=? AND id<>? AND assigned_at<=?",
+                      (g["asset_id"], gid, g["assigned_at"]))["t"]
+        if prev and at < prev:
+            raise ApiError(422, "date_before_return", "The handover date is before this asset was last returned", field="assigned_on")
+        if back and back < at:
+            raise ApiError(422, "date_before_handover", "The return date is before the handover date", field="returned_on")
+        nxt = db.one("SELECT MIN(assigned_at) t FROM assignments WHERE asset_id=? AND id<>? AND assigned_at>=?",
+                     (g["asset_id"], gid, g["assigned_at"]))["t"]
+        if nxt and back and back > nxt:
+            raise ApiError(422, "date_after_next", "The return date is after the next handover of this asset", field="returned_on")
+        changed = {k: v for k, v in new.items() if g[k] != v}
+        if not changed:
+            return
+        db.execute("UPDATE assignments SET %s WHERE id=?" % ", ".join(k + "=?" for k in changed), tuple(changed.values()) + (gid,))
+        ctx.audit("assignment.update", "asset", g["asset_id"], dict({k: v for k, v in changed.items() if not k.startswith("notes")},
+                                                                    assignment=gid, receipt=g["receipt_out_no"],
+                                                                    notes_changed=[k for k in changed if k.startswith("notes")]))
+
+
 def receipt(db, gid, kind, full_nid=False):
     """Everything needed to print a handover or return receipt for one assignment."""
     from . import company

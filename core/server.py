@@ -345,6 +345,7 @@ def branding(ctx):
     b["access_requests"] = not b["needs_setup"] and access.enabled(ctx.db, ctx.app.inst)
     if b["access_requests"]:
         b["access_domains"] = access.allowed_domains(ctx.db, ctx.app.inst)
+    b["asset_requests"] = bool(notify.get_settings(ctx.db, ctx.app.inst)["asset_requests_enabled"])
     return b
 
 

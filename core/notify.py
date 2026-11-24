@@ -31,7 +31,7 @@ log = logging.getLogger("am")
 DEFAULTS = {"alert_warranty_days": 30, "alert_maintenance_days": 7, "public_url": "",
             "email_enabled": False, "smtp_host": "", "smtp_port": 587, "smtp_security": "starttls",
             "smtp_user": "", "smtp_password": "", "smtp_from": "", "digest_hour": 7,
-            "access_requests_enabled": True, "access_allowed_domains": []}
+            "access_requests_enabled": True, "access_allowed_domains": [], "asset_requests_enabled": True, "receipt": {}}
 SECRET_KEYS = {"smtp_password"}
 
 
@@ -74,6 +74,38 @@ def set_value(db, key, val):
     db.execute("INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, json.dumps(val)))
 
 
+# ------------------------------------------------------------------ receipt layout (Company page -> "Receipts")
+RECEIPT_TEXTS = {"title_handover": 120, "title_return": 120, "sig_emp_handover": 80, "sig_emp_return": 80,
+                 "sig_staff_handover": 80, "sig_staff_return": 80, "footer": 1000}
+RECEIPT_ROWS = ("emp_no", "national_id", "department", "job", "category", "brand_model", "serial", "custom",
+                "condition", "expected_return", "notes", "sig_national_id")
+
+
+def receipt_layout(d):
+    """Validated receipt layout: own titles/labels/footer per language (empty = built-in text) and rows to hide."""
+    if not isinstance(d, dict):
+        raise ApiError(400, "invalid_field", "Invalid receipt settings", field="receipt")
+    out = {}
+    for k, n in RECEIPT_TEXTS.items():
+        for lang in ("en", "ar"):
+            key = "%s_%s" % (k, lang)
+            out[key] = text(d, key, maxlen=n, required=False, multiline=(k == "footer"))
+    hide = d.get("hide") or []
+    if not isinstance(hide, list) or any(h not in RECEIPT_ROWS for h in hide):
+        raise ApiError(422, "invalid_field", "Unknown receipt row", field="hide")
+    out["hide"] = [r for r in RECEIPT_ROWS if r in hide]
+    return out
+
+
+def save_receipt(ctx, d):
+    v = receipt_layout(d)
+    with ctx.db.tx():
+        ctx.db.execute("INSERT INTO settings(key,value) VALUES ('receipt',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                       (json.dumps(v, ensure_ascii=False),))
+        ctx.audit("settings.receipt", "settings", "", {"hide": v["hide"], "custom_texts": sorted(k for k, x in v.items() if k != "hide" and x)})
+    return v
+
+
 def save_settings(ctx, d):
     from . import access                                # access imports this module
     db, inst = ctx.db, ctx.app.inst
@@ -91,7 +123,8 @@ def save_settings(ctx, d):
          "smtp_from": text(d, "smtp_from", maxlen=200, required=False),
          "digest_hour": int(number(d, "digest_hour", minimum=0, maximum=23) or 0),
          "access_requests_enabled": bool(d["access_requests_enabled"]) if "access_requests_enabled" in d else bool(cur["access_requests_enabled"]),
-         "access_allowed_domains": access.parse_domains(d["access_allowed_domains"]) if "access_allowed_domains" in d else list(cur["access_allowed_domains"] or [])}
+         "access_allowed_domains": access.parse_domains(d["access_allowed_domains"]) if "access_allowed_domains" in d else list(cur["access_allowed_domains"] or []),
+         "asset_requests_enabled": bool(d["asset_requests_enabled"]) if "asset_requests_enabled" in d else bool(cur["asset_requests_enabled"])}
     pw = d.get("smtp_password")
     v["smtp_password"] = text(d, "smtp_password", maxlen=300, required=False) if isinstance(pw, str) and pw != "" else cur["smtp_password"]
     if d.get("clear_password"):
@@ -148,7 +181,7 @@ def alerts(db, inst, user, limit=60):
              lambda r: {"kind": "maintenance", "severity": "critical" if r["scheduled_for"] < t else "warning", "maintenance_id": r["id"],
                         "asset_id": r["asset_id"], "tag": r["tag"], "name": r["name"], "title": r["title"], "date": r["scheduled_for"],
                         "days": _days(t, r["scheduled_for"])})
-    if "requests.approve" in perms:
+    if "requests.approve" in perms and s.get("asset_requests_enabled", True):
         kind("request", "FROM asset_requests r JOIN employees e ON e.id=r.employee_id LEFT JOIN categories c ON c.id=r.category_id "
              "WHERE r.status='pending' ORDER BY r.id", (),
              "SELECT r.id, r.requested_at, r.needed_by, e.full_name_en, e.full_name_ar, c.name_en AS cat_en, c.name_ar AS cat_ar",

@@ -225,6 +225,13 @@ main{flex:1;overflow:auto;min-width:0}
 .scanframe{position:absolute;inset:18%;border:3px solid rgba(255,255,255,.92);border-radius:18px;box-shadow:0 0 0 2000px rgba(0,0,0,.28)}
 @media (prefers-reduced-motion:no-preference){.scanframe{animation:scanpulse 1.6s ease-in-out infinite}}
 @keyframes scanpulse{50%{border-color:rgba(255,255,255,.55)}}
+/* receipt: footer note, and "Edit before printing" (outlines never print) */
+.rnote{margin-top:12px;padding:10px 12px;border:1px dashed #c9c9d6;border-radius:8px;white-space:pre-wrap;font-size:13px;color:#333}
+.rcpt.editing{outline:2px dashed var(--brand);outline-offset:6px;cursor:text}
+.rcpt.editing :is(h1,h3,td,th,.lbl,b,.rterms,.rnote,.rfoot span):hover{background:rgba(109,74,242,.08)}
+@media print{.rcpt.editing{outline:0}.rcpt.editing *:hover{background:none}}
+.rlrows{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 14px}
+.rlrows .cb{min-height:34px;font-weight:600}
 .rsig .rname{font-weight:400;color:#333;font-size:13px}
 .rblank{display:inline-block;width:min(220px,60%);height:1.1em;border-bottom:1px dotted #555;vertical-align:bottom}
 .rfoot{display:flex;justify-content:space-between;margin-top:30px;padding-top:10px;border-top:1px solid #d5d5dd;color:#888;font-size:11px}
