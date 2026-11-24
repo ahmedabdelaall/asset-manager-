@@ -13,7 +13,7 @@
     <h1>Asset Master<br>User Guide</h1>
     <div class="lead">Everything the system does — every page, every button, and step-by-step instructions for the everyday work of managing company assets.</div>
   </div>
-  <div class="meta"><span>Version 0.8.0</span><span>For administrators, asset managers, HR and everyone who uses the system</span></div>
+  <div class="meta"><span>Version 0.9.0</span><span>For administrators, asset managers, HR and everyone who uses the system</span></div>
 </section>
 
 <h1 class="ch" style="page-break-before:avoid">Contents</h1>
@@ -45,6 +45,7 @@
   <li><b>25</b> Rules the system enforces &amp; messages</li>
   <li><b>26</b> For the server administrator</li>
   <li><b>27</b> Glossary</li>
+  <li><b>28</b> Project setup, access requests and mobile app</li>
 </ol>
 
 <div class="box tip" style="margin-top:8mm"><b>How to read this guide</b>Button and field names appear like this: <span class="ui">Add asset</span>. Every chapter starts with what the page is for, then lists every button and what it does, then gives step-by-step instructions. You only see the pages and buttons your role allows — if a button described here is missing for you, your role does not include that permission (chapter 18).</div>
@@ -84,7 +85,7 @@
 <li>On <b>Licence</b>, click <span class="ui">Copy</span> next to the <b>activation request code</b> and send it to your vendor.</li>
 <li>You receive a licence file (<span class="mono">.lic</span>). Click <span class="ui">Choose file</span> (or paste its contents) and then <span class="ui">Activate licence</span>.</li>
 </ol>
-<p>Until a valid licence is active the system is <b>locked</b>: only the Super Administrator can sign in, and only the Licence and My account pages work.</p>
+<p>Some deployments use a licence. If the server administrator has switched licensing off, skip this section: there is no licence page or user limit and the system is ready for normal use after setup. Otherwise, until a valid licence is active the system is <b>locked</b>: only the Super Administrator can sign in, and only the Licence and My account pages work.</p>
 <h2>Signing in</h2>
 <figure><img src="img/en_login.png"><figcaption>The sign-in page. The language and theme buttons are in the top corner.</figcaption></figure>
 <ul>
@@ -403,6 +404,7 @@
 </ol>
 <h2>Scanning</h2>
 <p>Open the phone camera and point it at the label; tap the link that appears. The system opens (sign in if needed) and shows that asset's detail window directly. If the tag no longer exists, a message says so.</p>
+<p>You can also use <b>Scan QR / barcode</b> inside Asset Master to use the phone camera and search by the asset tag, serial number, IMEI or a unique category field. Camera access requires a secure connection (HTTPS); local HTTP testing may require a browser-specific development setting. On an installed phone app, open the scanner from the app menu. If camera access is unavailable, type or paste the code in the manual entry box.</p>
 
 <!-- ============================================================ 15 -->
 <h1 class="ch"><span class="n">15</span>Excel import and export</h1>
@@ -529,6 +531,8 @@
 <tr><td><b>Send at</b></td><td>The hour of the daily e-mail (server time zone).</td></tr>
 <tr><td><b>User name, Password</b></td><td>The mailbox login. The password is stored <b>encrypted</b> and never shown again; leave it empty to keep the saved one.</td></tr>
 <tr><td><b>Sender address</b></td><td>e.g. assets@yourcompany.com.</td></tr>
+<tr><td><b>Allowed e-mail domains for access requests</b></td><td>Optional comma-separated list such as <span class="mono">company.com, company.com.eg</span>. Only exact domains are accepted; add each subdomain separately. Leave empty to allow any domain.</td></tr>
+<tr><td><b>Allow people to request access</b></td><td>Shows or hides the public Request access link on the sign-in page. Each request still needs an administrator's approval.</td></tr>
 <tr><td><span class="ui">Send test e-mail to me</span></td><td>Saves and sends a test message to your own e-mail address.</td></tr>
 <tr><td><span class="ui">Send today's summary now</span></td><td>Sends the daily e-mail immediately to everyone subscribed.</td></tr>
 </table>
@@ -660,6 +664,28 @@ docker compose up -d</pre>
 <h2>Security built in</h2>
 <p>Encrypted password storage, sessions with time-outs, protection against cross-site attacks, sign-in lock-out, role-based permissions checked on every request, tamper-evident audit log, uploaded-file checks, encrypted e-mail password, read-only container. For use over a network, put the system behind HTTPS (see docs/DEPLOY_DOCKER.md).</p>
 
+<!-- ============================================================ 28 -->
+<h1 class="ch"><span class="n">28</span>Project setup, access requests and mobile app</h1>
+<h2>What is included in the project</h2>
+<p>Asset Master is a web application. The server is written in Python; the interface uses HTML, CSS and JavaScript. It stores company data in a SQLite database and uploaded files in the application data volume. With Docker, the database and files live in the persistent <span class="mono">am_data</span> volume on the server, not in each user's browser. Each company should have its own deployment and data volume.</p>
+<table><tr><th>Project area</th><th>What it does</th></tr>
+<tr><td><b>core/</b></td><td>Application server, account and role security, inventory rules, reports, imports, backups and notifications.</td></tr>
+<tr><td><b>core/web/</b></td><td>Browser interface, English and Arabic translations, styles, QR tools, installable-app files and camera scanner.</td></tr>
+<tr><td><b>core/migrations/</b></td><td>Numbered database upgrades, applied automatically when the app starts.</td></tr>
+<tr><td><b>tools/</b></td><td>Server administration, backup and deployment-generation tools.</td></tr>
+<tr><td><b>docs/</b></td><td>Architecture, deployment and user guidance.</td></tr></table>
+<div class="box warn"><b>Keep company data private</b>Backups contain the database and uploaded documents. Store them securely, restrict access to the server and backups, and use HTTPS for access over a network. Do not place company data or secrets in a public source-code repository.</div>
+<h2>Requesting an account</h2>
+<ol class="steps"><li>On the sign-in page, choose <span class="ui">Request access</span>.</li><li>Enter your name, work e-mail, department, job title, phone, preferred username and why you need access.</li><li>An administrator reviews the request under <b>Users</b>. A request is not an account and cannot sign in before approval.</li><li>The administrator chooses a role and approves, or rejects with an optional note. On approval, the administrator sees a temporary password. If e-mail is configured and selected, the person can receive the sign-in details by e-mail.</li><li>At first sign-in, the new user must choose a personal password. The role controls which pages and actions are available.</li></ol>
+<p>The administrator controls this feature and the allowed e-mail domains under <b>Company &amp; branding → Alerts &amp; e-mail</b>. For example, allow <span class="mono">company.com</span> to accept addresses ending in that exact domain. The system does not automatically create an account just because someone submits the form.</p>
+<h2>Install on Android</h2>
+<ol class="steps"><li>Open the company's HTTPS app address in Chrome on the phone. The phone and server must be reachable to each other; a company domain works over mobile data as well as Wi-Fi.</li><li>Sign in if needed, then use <span class="ui">Install app</span> in the app or Chrome's <span class="ui">Install app</span> menu option. The exact menu wording depends on Chrome.</li><li>Confirm installation. Asset Master appears in the Android app list and opens in its own app window. A plain home-screen bookmark may still open as a browser tab.</li><li>Open Asset Master and use <b>Scan QR / barcode</b>. Allow camera access when Android asks. If the camera cannot be used, enter the code manually.</li></ol>
+<div class="box tip"><b>For reliable phone use</b>Use the organization's HTTPS domain. The laptop's local Wi-Fi address only works while the phone can reach that laptop on the same network, and the address can change. Printed QR labels must use the current team address; set it in Company &amp; branding before printing labels.</div>
+<h2>National ID and printed receipts</h2>
+<p>An employee's national ID (الرقم القومي) is stored in the employee record and printed on handover and return receipts. If it has not been entered, the receipt leaves a blank line to write it by hand. National IDs are sensitive personal data: access to the full value and its export is limited by permissions.</p>
+<h2>Starting a fresh company deployment</h2>
+<p>Each company should have a separate deployment, persistent data volume, setup and administrator account. The first administrator completes the one-time setup, adds company branding, categories, departments and employees, then imports or registers assets. The server administrator should configure HTTPS, time zone, allowed e-mail domains, SMTP (if needed), and a tested backup plan. Do not reuse another company's database or expose the database file directly to staff.</p>
+
 <!-- ============================================================ 27 -->
 <h1 class="ch"><span class="n">27</span>Glossary</h1>
 <table>
@@ -677,6 +703,6 @@ docker compose up -d</pre>
 <tr><td>Full backup</td><td>A single file with the database and all uploaded files.</td></tr>
 <tr><td>Audit log</td><td>The permanent, tamper-evident record of actions.</td></tr>
 </table>
-<p class="small" style="margin-top:8mm">Asset Master 0.8.0 — this guide describes the default roles and settings; your administrator may have adjusted roles, names and colours for your company.</p>
+<p class="small" style="margin-top:8mm">Asset Master 0.9.0 — this guide describes the default roles and settings; your administrator may have adjusted roles, names and colours for your company.</p>
 </body>
 </html>

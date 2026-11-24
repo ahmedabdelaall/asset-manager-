@@ -20,6 +20,7 @@ const ICONS = {
   moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
   globe: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
   user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
   copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
@@ -305,7 +306,7 @@ async function logout() {
 const NAV = [['dashboard', 'home', 'dashboard.view'], ['assets', 'box', 'assets.view'], ['assignments', 'swap', 'assets.view'], ['employees', 'idcard', 'employees.view'],
 ['maintenance', 'tool', 'maintenance.view'], ['requests', 'inbox', ['requests.create', 'requests.approve']],
 ['categories', 'folder', 'categories.manage'], ['reports', 'chart', 'reports.view'], ['users', 'users', 'users.view'], ['roles', 'shield', 'roles.view'], ['company', 'building', 'company.view'],
-['license', 'key', 'license.view'], ['audit', 'list', 'audit.view'], ['backups', 'db', 'backup.view'], ['account', 'user', null]];
+['license', 'key', 'license.view'], ['audit', 'list', 'audit.view'], ['backups', 'db', 'backup.view'], ['account', 'gear', null]];
 const PAGES = { dashboard: pDashboard, assets: pAssets, assignments: pAssignments, employees: pEmployees, categories: pCategories, reports: pReports, maintenance: pMaintenance, requests: pRequests, users: pUsers, roles: pRoles, company: pCompany, license: pLicense, audit: pAudit, backups: pBackups, account: pAccount };
 const curPage = () => { const p = location.hash.replace(/^#\//, '').split('?')[0]; return PAGES[p] ? p : (p === 'login' || p === 'setup' || p === '' ? 'dashboard' : 'dashboard'); };
 const licOff = () => !!(S.license && S.license.disabled);          // AM_LICENSE=off: every licence screen and message is hidden
@@ -328,10 +329,11 @@ function renderShell(page) {
   const nav = items.map(([k, i]) => {
     const g = NAV_GROUP[k] || null, head = g !== grp && g ? (g === 'me' ? '<div class="grp sep"></div>' : `<div class="grp">${t('navg.' + g)}</div>`) : '';
     grp = g;
-    return head + `<a href="#/${k}" class="${k === page ? 'on' : ''}" ${k === page ? 'aria-current="page"' : ''}>${ic(i)}<span>${t('nav.' + k)}</span></a>`;
+    return head + `<a href="#/${k}" class="${k === page ? 'on' : ''}" ${k === page ? 'aria-current="page"' : ''}>${ic(i)}<span>${t(k === 'account' ? 'nav.settings' : 'nav.' + k)}</span></a>`;
   }).join('');
   $('#root').innerHTML = `<div class="app"><aside class="side" id="side"><div class="brand">${logoHTML()}<div><b>${esc(companyName() || appName())}</b><span>${esc(appName())}</span></div></div>
   <nav class="nav" aria-label="${esc(appName())}">${nav}</nav>
+  <a class="me" href="#/account" title="${esc(t('nav.settings'))}"><span class="av">${esc(initials(S.user.full_name))}</span><span class="who"><b>${esc(S.user.full_name)}</b><small>${esc(nameOf(S.user, 'role_name'))}</small></span></a>
   <div class="foot">${t('common.version')} ${esc(S.brand.version || '')}</div></aside><div class="navov" id="navov"></div>
   <main><div class="wrap"><div class="top" id="tophead"></div>${licenseBanner()}<div id="page">${skeleton()}</div></div></main></div>`;
   const app = $('.app');
@@ -343,23 +345,13 @@ function pageHead(title, sub, right = '') {
   ${S.installEvt ? `<button class="chip" id="t-install" title="${t('pwa.install')}">${ic('download', 17)}<span class="hide-sm">${t('pwa.install')}</span></button>` : ''}
   ${has('assets.view') ? `<button class="chip" id="t-scan" title="${t('scan.button')}" aria-label="${t('scan.button')}">${ic('qr', 17)}<span class="hide-sm">${t('scan.button')}</span></button>` : ''}
   <div class="menu" id="bellwrap"><button class="chip" id="t-bell" title="${t('alert.title')}" aria-label="${t('alert.title')}">${ic('bell', 17)}<span class="bdg" id="bellc" hidden></span></button></div>
-  <button class="chip" id="t-lang" aria-label="${t('common.language')}">${ic('globe', 17)}<span class="hide-sm">${LANG === 'ar' ? 'English' : 'العربية'}</span></button>
-  <button class="chip" id="t-theme" title="${t('common.theme')}" aria-label="${t('common.theme')}">${ic(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', 17)}</button>
-  <div class="menu"><button class="chip" id="t-user" aria-label="${esc(S.user.full_name)}">${ic('user', 17)}<span class="hide-sm">${esc(S.user.full_name)}</span></button></div>`;
+`;
   $('#t-menu').onclick = () => $('.app').classList.toggle('navopen');
-  bindTools();
   $('#t-bell').onclick = openBell;
   const sc = $('#t-scan'); if (sc) sc.onclick = openScanner;
   const inst = $('#t-install'); if (inst) inst.onclick = installApp;
   if (S.alerts) { const c = $('#bellc'); c.textContent = S.alerts.total > 99 ? '99+' : S.alerts.total; c.hidden = !S.alerts.total; }
   refreshBell();
-  $('#t-user').onclick = e => {
-    e.stopPropagation(); const menu = $('#t-user').parentElement; const ex = $('.pop', menu); if (ex) { ex.remove(); return; }
-    menu.insertAdjacentHTML('beforeend', `<div class="pop"><div class="who"><b>${esc(S.user.full_name)}</b><small>${esc(nameOf(S.user, 'role_name'))}</small><small class="mono">${esc(S.user.username)}</small></div>
-    <button id="m-acc">${ic('user', 16)}${t('nav.account')}</button><button id="m-out">${ic('logout', 16)}${t('nav.logout')}</button></div>`);
-    $('#m-acc').onclick = () => go('#/account'); $('#m-out').onclick = logout;
-    setTimeout(() => document.addEventListener('click', () => { const p = $('.pop', menu); if (p) p.remove(); }, { once: true }), 0);
-  };
 }
 let renderSeq = 0;
 async function render() {
@@ -693,16 +685,26 @@ docker compose up -d</div></div></div>
 
 /* ============ my account ============ */
 async function pAccount(el) {
-  pageHead(t('acc.title'), t('acc.sub'));
+  pageHead(t('settings.title'), t('settings.sub'));
   el.innerHTML = `<div class="grid g12"><div class="card s5"><h3>${t('acc.profile')}</h3><dl style="display:grid;grid-template-columns:130px 1fr;gap:10px 14px;margin:14px 0 0"><dt style="color:var(--mut)">${t('users.full_name')}</dt><dd style="margin:0;font-weight:600">${esc(S.user.full_name)}</dd><dt style="color:var(--mut)">${t('login.username')}</dt><dd class="mono" style="margin:0">${esc(S.user.username)}</dd><dt style="color:var(--mut)">${t('users.email')}</dt><dd class="mono" style="margin:0">${esc(S.user.email || '—')}</dd><dt style="color:var(--mut)">${t('users.role')}</dt><dd style="margin:0"><span class="badge info">${esc(nameOf(S.user, 'role_name'))}</span></dd></dl>
   <h3 style="margin-top:24px">${t('acc.prefs')}</h3><div class="toolbar" style="margin-top:10px"><div class="seg" id="sl"><button data-l="en" class="${LANG === 'en' ? 'on' : ''}">English</button><button data-l="ar" class="${LANG === 'ar' ? 'on' : ''}">العربية</button></div>
   <div class="seg" id="st">${['light', 'dark', 'system'].map(x => `<button data-t="${x}" class="${S.themePref === x ? 'on' : ''}">${t('theme.' + x)}</button>`).join('')}</div></div>
   <label class="cb" style="margin-top:14px;display:flex;gap:10px;align-items:center;font-weight:600;cursor:pointer"><input type="checkbox" id="acc-mail" ${S.user.email_alerts ? 'checked' : ''} ${S.user.email ? '' : 'disabled'} style="width:18px;height:18px;accent-color:var(--brand)"> ${ic('mail', 16)} ${t('acc.email_alerts')}</label>
   <div class="mut" style="font-size:12.5px;margin-top:4px">${S.user.email ? t('acc.email_alerts_hint') : t('acc.no_email')}</div></div>
-  <form class="card s7" id="pf" novalidate><h3>${t('pw.change_title')}</h3><div class="sub">${t('pw.change_sub')}</div><div class="grid" style="gap:14px;max-width:420px">${passwordFields()}<button class="btn pri" type="submit">${t('pw.change')}</button></div></form></div>`;
+  <form class="card s7" id="pf" novalidate><h3>${t('pw.change_title')}</h3><div class="sub">${t('pw.change_sub')}</div><div class="grid" style="gap:14px;max-width:420px">${passwordFields()}<button class="btn pri" type="submit">${t('pw.change')}</button></div></form></div>
+  ${adminLinks()}
+  <div class="card" style="margin-top:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div class="grow" style="flex:1;min-width:200px"><h3 style="margin:0">${t('settings.signout_title')}</h3><div class="sub" style="margin:4px 0 0">${esc(t('settings.signout_sub', { name: S.user.full_name }))}</div></div><button class="btn dng" id="acc-out">${ic('logout', 16)}${t('nav.logout')}</button></div>`;
   $$('#sl button').forEach(b => b.onclick = () => setLang(b.dataset.l)); $$('#st button').forEach(b => b.onclick = () => setTheme(b.dataset.t));
   $('#acc-mail').onchange = async e => { try { await api('/api/auth/prefs', { method: 'PUT', body: { lang: LANG, theme: S.themePref, email_alerts: e.target.checked } }); S.user.email_alerts = e.target.checked; toast(t('toast.saved')); } catch (err) { fail(err); } };
   bindPasswordForm($('#pf'));
+  $('#acc-out').onclick = logout;
+}
+/* company-wide settings, shown on the Settings page to the people allowed to open them */
+function adminLinks() {
+  const L = [['company', 'settings.l_company'], ['users', 'settings.l_users'], ['roles', 'settings.l_roles'], ['backups', 'settings.l_backups'], ['audit', 'settings.l_audit'], ['license', 'settings.l_license']]
+    .map(([k, d]) => [NAV.find(n => n[0] === k), d]).filter(([n]) => n && canSee(n[2]) && !(n[0] === 'license' && licOff()));
+  if (!L.length) return '';
+  return `<div class="card" style="margin-top:18px"><h3>${t('settings.admin')}</h3><div class="sub">${t('settings.admin_sub')}</div><div class="setlinks">${L.map(([n, d]) => `<a href="#/${n[0]}">${ic(n[1], 18)}<span><b>${t('nav.' + n[0])}</b><small>${t(d)}</small></span></a>`).join('')}</div></div>`;
 }
 
 /* ============ phase 2: shared helpers ============ */
