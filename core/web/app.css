@@ -353,3 +353,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
 .accmain{flex:1;min-width:220px}.accsub{color:var(--mut);font-size:12.5px;margin-top:2px}
 .accreason{margin-top:6px;padding:8px 10px;border-radius:10px;background:var(--surface);border:1px solid var(--line);white-space:pre-wrap;font-size:13.5px;color:var(--ink2)}
 .accbtns{display:flex;gap:8px;flex-wrap:wrap}
+/* "Sort by" control on list toolbars */
+.sortsel{display:inline-flex;align-items:center;gap:6px;color:var(--mut)}
+.sortsel .sel{min-width:0;color:var(--ink);flex:1 1 auto}
+@media (max-width:720px){.toolbar .sortsel{flex:1 1 160px}}
+.pubasset .holder small{display:block}

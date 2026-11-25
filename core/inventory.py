@@ -375,7 +375,27 @@ def _asset_row(r):
     return d
 
 
-def list_assets(db, q="", status="", category_id=None, page=1, per_page=50):
+# "Sort by" on the Assets page (and the export). Ties always fall back to the newest first.
+ASSET_SORTS = {
+    "newest": "a.id DESC",
+    "oldest": "a.id ASC",
+    "tag": "a.tag COLLATE NOCASE ASC, a.id DESC",
+    "tag_desc": "a.tag COLLATE NOCASE DESC, a.id DESC",
+    "name": "a.name COLLATE NOCASE ASC, a.id DESC",
+    "category": "c.name_en COLLATE NOCASE ASC, a.tag COLLATE NOCASE ASC",
+    "status": "a.status ASC, a.tag COLLATE NOCASE ASC",
+    "holder": "(e.id IS NULL) ASC, e.full_name_en COLLATE NOCASE ASC, a.tag COLLATE NOCASE ASC",
+    "location": "(a.location = '') ASC, a.location COLLATE NOCASE ASC, a.tag COLLATE NOCASE ASC",
+    "purchase_new": "(a.purchase_date = '') ASC, a.purchase_date DESC, a.id DESC",
+    "purchase_old": "(a.purchase_date = '') ASC, a.purchase_date ASC, a.id DESC",
+    "cost_high": "(a.purchase_cost IS NULL) ASC, a.purchase_cost DESC, a.id DESC",
+    "cost_low": "(a.purchase_cost IS NULL) ASC, a.purchase_cost ASC, a.id DESC",
+    "warranty": "(a.warranty_until = '') ASC, a.warranty_until ASC, a.id DESC",
+}
+
+
+def list_assets(db, q="", status="", category_id=None, page=1, per_page=50, sort="newest"):
+    order = " ORDER BY " + ASSET_SORTS.get(sort, ASSET_SORTS["newest"])      # whitelist: never user text in SQL
     where, params = [], []
     if q:
         where.append("(a.tag LIKE ? ESCAPE '\\' OR a.name LIKE ? ESCAPE '\\' OR a.serial_no LIKE ? ESCAPE '\\' OR a.brand LIKE ? ESCAPE '\\' "
@@ -390,14 +410,31 @@ def list_assets(db, q="", status="", category_id=None, page=1, per_page=50):
         params.append(category_id)
     w = (" WHERE " + " AND ".join(where)) if where else ""
     if per_page is None:                                  # everything (exports) - one query, no paging
-        rows = db.query(ASSET_SELECT + w + " ORDER BY a.id DESC", params)
+        rows = db.query(ASSET_SELECT + w + order, params)
         return {"total": len(rows), "page": 1, "per_page": len(rows), "assets": [_asset_row(r) for r in rows]}
     per_page = max(1, min(int(per_page), 200))
     page = max(1, int(page))
     total = db.one("SELECT COUNT(*) c FROM assets a LEFT JOIN assignments g ON g.asset_id=a.id AND g.returned_at IS NULL "
                    "LEFT JOIN employees e ON e.id=g.employee_id" + w, params)["c"]
-    rows = db.query(ASSET_SELECT + w + " ORDER BY a.id DESC LIMIT ? OFFSET ?", params + [per_page, (page - 1) * per_page])
+    rows = db.query(ASSET_SELECT + w + order + " LIMIT ? OFFSET ?", params + [per_page, (page - 1) * per_page])
     return {"total": total, "page": page, "per_page": per_page, "assets": [_asset_row(r) for r in rows]}
+
+
+def public_asset(db, tag):
+    """What anyone who scans a label sees without signing in: no prices, notes, documents, custom fields,
+    national IDs or contact details - only what identifies the item and who looks after it."""
+    r = db.one("SELECT a.tag, a.name, a.brand, a.model, a.serial_no, a.status, a.condition, a.location, a.purchase_date, "
+               "a.warranty_until, c.name_en AS cat_en, c.name_ar AS cat_ar, e.full_name_en AS holder_en, e.full_name_ar AS holder_ar, "
+               "d.name_en AS dept_en, d.name_ar AS dept_ar, g.assigned_at "
+               "FROM assets a JOIN categories c ON c.id=a.category_id "
+               "LEFT JOIN assignments g ON g.asset_id=a.id AND g.returned_at IS NULL "
+               "LEFT JOIN employees e ON e.id=g.employee_id LEFT JOIN departments d ON d.id=e.department_id "
+               "WHERE a.tag=? COLLATE NOCASE", (tag,))
+    if r is None:
+        raise ApiError(404, "asset_not_found", "Asset not found")
+    out = dict(r)
+    out["assigned_at"] = (out["assigned_at"] or "")[:10]
+    return out
 
 
 def get_asset(db, aid):

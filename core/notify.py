@@ -31,7 +31,7 @@ log = logging.getLogger("am")
 DEFAULTS = {"alert_warranty_days": 30, "alert_maintenance_days": 7, "public_url": "",
             "email_enabled": False, "smtp_host": "", "smtp_port": 587, "smtp_security": "starttls",
             "smtp_user": "", "smtp_password": "", "smtp_from": "", "digest_hour": 7,
-            "access_requests_enabled": True, "access_allowed_domains": [], "asset_requests_enabled": True}
+            "access_requests_enabled": True, "access_allowed_domains": [], "asset_requests_enabled": True, "public_scan_enabled": True}
 SECRET_KEYS = {"smtp_password"}
 
 
@@ -92,7 +92,8 @@ def save_settings(ctx, d):
          "digest_hour": int(number(d, "digest_hour", minimum=0, maximum=23) or 0),
          "access_requests_enabled": bool(d["access_requests_enabled"]) if "access_requests_enabled" in d else bool(cur["access_requests_enabled"]),
          "access_allowed_domains": access.parse_domains(d["access_allowed_domains"]) if "access_allowed_domains" in d else list(cur["access_allowed_domains"] or []),
-         "asset_requests_enabled": bool(d["asset_requests_enabled"]) if "asset_requests_enabled" in d else bool(cur["asset_requests_enabled"])}
+         "asset_requests_enabled": bool(d["asset_requests_enabled"]) if "asset_requests_enabled" in d else bool(cur["asset_requests_enabled"]),
+         "public_scan_enabled": bool(d["public_scan_enabled"]) if "public_scan_enabled" in d else bool(cur["public_scan_enabled"])}
     pw = d.get("smtp_password")
     v["smtp_password"] = text(d, "smtp_password", maxlen=300, required=False) if isinstance(pw, str) and pw != "" else cur["smtp_password"]
     if d.get("clear_password"):

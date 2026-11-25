@@ -110,7 +110,22 @@ def employees_delete(ctx):
 def assets_list(ctx):
     q = ctx.query
     return inv.list_assets(ctx.db, q.get("q", "").strip(), q.get("status", ""), _int(q, "category", None),
-                           _int(q, "page", 1), _int(q, "per_page", 50))
+                           _int(q, "page", 1), _int(q, "per_page", 50), q.get("sort", "newest"))
+
+
+@route("GET", "/api/public/asset", public=True, lic=False)
+def public_asset(ctx):
+    """The page a phone opens from a QR label when nobody is signed in (can be switched off in Company settings)."""
+    if not notify.get_settings(ctx.db, ctx.app.inst)["public_scan_enabled"]:
+        raise ApiError(403, "public_scan_off", "Sign in to see this asset")
+    lim = ctx.app.scan_limiter
+    if not lim.check(ctx.ip):
+        raise ApiError(429, "too_many_attempts", "Too many attempts. Try again later.")
+    lim.fail(ctx.ip)                                  # every look-up counts: slows down guessing tags one by one
+    tag = ctx.query.get("tag", "").strip()[:40]
+    if not tag:
+        raise ApiError(404, "asset_not_found", "Asset not found")
+    return inv.public_asset(ctx.db, tag)
 
 
 @route("GET", "/api/assets/summary", perm="assets.view")
@@ -247,7 +262,8 @@ def import_assets(ctx):
 @route("GET", "/api/export/assets", perm="assets.view")
 def export_assets(ctx):
     q = ctx.query
-    return _xlsx(transfer.export_assets(ctx.db, _lang(ctx), q.get("q", "").strip(), q.get("status", ""), _int(q, "category", None)), "assets")
+    return _xlsx(transfer.export_assets(ctx.db, _lang(ctx), q.get("q", "").strip(), q.get("status", ""), _int(q, "category", None),
+                                         q.get("sort", "newest")), "assets")
 
 
 @route("GET", "/api/export/employees", perm="employees.view")

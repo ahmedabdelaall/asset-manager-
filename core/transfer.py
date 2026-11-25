@@ -335,11 +335,11 @@ def _nm(r, base, lang):
     return a or b or ""
 
 
-def export_assets(db, lang, q="", status="", category_id=None):
+def export_assets(db, lang, q="", status="", category_id=None, sort="newest"):
     custom = [k for k in _custom_keys(db) if k not in ASSET_COLS]
     head = ASSET_COLS[:-2] + ["status", "category", "holder_emp_no", "holder_name", "assigned_at", "expected_return"] + custom
     rows = [head]
-    for a in inv.list_assets(db, q, status, category_id, 1, None)["assets"]:     # one query for every matching asset
+    for a in inv.list_assets(db, q, status, category_id, 1, None, sort)["assets"]:     # one query for every matching asset
         rows.append([a["cat_code"], a["tag"], a["name"], a["brand"], a["model"], a["serial_no"], _t(lang, "cond." + a["condition"]),
                      a["location"], a["purchase_date"], a["purchase_cost"], a["supplier"], a["warranty_until"], a["notes"],
                      _t(lang, "st." + a["status"]), _nm(a, "cat", lang), a["holder_no"] or "",

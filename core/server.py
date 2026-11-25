@@ -94,6 +94,7 @@ class App:
         self.setup_limiter = IpLimiter()
         self.access_limiter = IpLimiter(window=3600, maximum=5)     # public "request access" form: 5 per IP per hour
         self.invite_limiter = IpLimiter(window=600, maximum=20)     # invitation links: 20 wrong links per IP per 10 minutes
+        self.scan_limiter = IpLimiter(window=600, maximum=60)       # public QR page: 60 look-ups per IP per 10 minutes
 
     def needs_setup(self):
         return self.db.one("SELECT COUNT(*) c FROM users")["c"] == 0

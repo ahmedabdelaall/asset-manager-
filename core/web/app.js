@@ -22,6 +22,7 @@ const ICONS = {
   user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  sort: '<path d="M3 6h11M3 12h8M3 18h5"/><path d="M18 5v14m0 0-3-3m3 3 3-3"/>',
   copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
@@ -177,6 +178,20 @@ function showErrors(root, e) {
   return false;
 }
 const go = h => { if (location.hash === h) render(); else location.hash = h; };
+/* "Sort by" on lists. The choice is remembered per list in this browser (a convenience only). */
+const sortPref = (k, def, allowed) => { try { const v = localStorage.getItem('am_sort_' + k); return v && allowed.includes(v) ? v : def; } catch (e) { return def; } };
+const sortSave = (k, v) => { try { localStorage.setItem('am_sort_' + k, v); } catch (e) { } };
+const sortSel = (id, opts, cur) => `<label class="sortsel" title="${esc(t('sort.by'))}">${ic('sort', 16)}<select class="sel" id="${id}" aria-label="${esc(t('sort.by'))}">${opts.map(o => `<option value="${o}" ${o === cur ? 'selected' : ''}>${esc(t('sort.' + o))}</option>`).join('')}</select></label>`;
+const cmpText = (x, y) => String(x).localeCompare(String(y), LANG === 'ar' ? 'ar' : 'en', { numeric: true, sensitivity: 'base' });
+const isBlank = v => v === null || v === undefined || v === '';
+/* comparator on one value; blanks always go last, whatever the direction */
+const by = (get, desc = false) => (a, b) => {
+  const x = get(a), y = get(b), bx = isBlank(x), byy = isBlank(y);
+  if (bx || byy) return bx === byy ? 0 : bx ? 1 : -1;
+  const r = typeof x === 'number' && typeof y === 'number' ? x - y : cmpText(x, y);
+  return desc ? -r : r;
+};
+const sortRows = (rows, cmp) => cmp ? rows.slice().sort(cmp) : rows;
 
 /* ============ auth screens ============ */
 function authTools() {
@@ -275,6 +290,31 @@ async function renderInvite() {
       } catch (le) { toast(t('inv.joined_toast')); history.replaceState(null, '', '#/login'); render(); }
     } catch (err) { b.disabled = false; if (['invite_invalid', 'invite_used', 'invite_expired'].includes(err.code)) return dead(err); if (!showErrors(f, err)) fail(err); }
   };
+}
+/* QR label opened on a phone by someone who is not signed in: a short, read-only summary of the asset.
+   Prices, notes, documents, custom fields and personal data stay behind the sign-in. Can be switched off in Company settings. */
+async function renderPublicAsset() {
+  const tag = new URLSearchParams(location.hash.split('?')[1] || '').get('tag') || '';
+  const back = location.hash;
+  const shell = inner => { $('#root').innerHTML = `<div class="auth">${authTools()}<div class="box"><div class="head">${logoHTML()}<h1>${esc(companyName() || appName())}</h1><p>${esc(appName())}</p></div>${inner}</div></div>`; bindTools(); };
+  const signin = `<button class="btn pri" id="ps-in" style="width:100%">${ic('lock', 16)}${t('pub.signin')}</button>`;
+  const bindIn = () => { const b = $('#ps-in'); if (b) b.onclick = () => { S.next = back; go('#/login'); }; };
+  shell(`<div class="skel">${t('common.loading')}</div>`);
+  let a;
+  try { a = await api('/api/public/asset?tag=' + encodeURIComponent(tag)); }
+  catch (err) {
+    if (err.code === 'public_scan_off') { S.next = back; return renderLogin(); }
+    shell(`<div class="card done-card" role="alert">${ic('warn', 40)}<h3>${t(err.code === 'asset_not_found' ? 'scan.not_found' : 'err.generic')}</h3><p class="mono">${esc(tag)}</p>${err.code !== 'asset_not_found' ? `<p>${esc(errText(err))}</p>` : ''}${signin}</div>`);
+    return bindIn();
+  }
+  const row = (k, v) => v ? `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>` : '';
+  const wr = a.warranty_until ? esc(fmtDate(a.warranty_until)) + (a.warranty_until < today() ? ` <span class="badge bad">${t('assets.warranty_expired')}</span>` : ` <span class="badge good">${t('pub.under_warranty')}</span>`) : '';
+  const holder = nameOf(a, 'holder');
+  shell(`<div class="card pubasset"><div style="display:flex;gap:12px;align-items:flex-start"><div style="flex:1;min-width:0"><div class="mono mut" style="font-size:13px">${esc(a.tag)}</div><h2 style="margin:2px 0 4px">${esc(a.name)}</h2><div class="mut">${esc(nameOf(a, 'cat'))}${a.brand || a.model ? ' · ' + esc([a.brand, a.model].filter(Boolean).join(' ')) : ''}</div></div>${stBadge(a.status)}</div>
+    ${holder ? `<div class="holder" style="margin:14px 0 0"><div class="av">${esc(initials(holder))}</div><div style="flex:1"><small>${t('assets.held_by')}</small><b>${esc(holder)}</b>${a.dept_en || a.dept_ar ? `<small>${esc(nameOf(a, 'dept'))}</small>` : ''}${a.assigned_at ? `<small>${esc(t('asg.since', { d: fmtDate(a.assigned_at) }))}</small>` : ''}</div></div>` : ''}
+    <dl class="infogrid" style="margin-top:14px">${row(t('assets.serial'), a.serial_no ? `<span class="mono">${esc(a.serial_no)}</span>` : '')}${row(t('assets.condition'), esc(t('cond.' + a.condition)))}${row(t('assets.location'), esc(a.location))}${row(t('assets.purchase_date'), a.purchase_date ? esc(fmtDate(a.purchase_date)) : '')}${row(t('assets.warranty'), wr)}</dl>
+    <div style="margin-top:16px">${signin}<div class="hint" style="text-align:center;margin-top:8px">${t('pub.signin_hint')}</div></div></div>`);
+  bindIn();
 }
 function renderSetup() {
   $('#root').innerHTML = `<div class="auth">${authTools()}<div class="box wide"><div class="head">${logoHTML()}<h1>${t('setup.title')}</h1><p>${t('setup.sub')}</p></div>
@@ -395,6 +435,7 @@ async function render() {
   if (S.brand.needs_setup) return renderSetup();
   if (!S.user && h === 'request-access') return renderRequestAccess();
   if (h === 'invite') { if (S.user) { api('/api/auth/logout', { method: 'POST', body: {} }).catch(() => { }); S.user = null; CSRF = null; } return renderInvite(); }   // someone else's link: never join while signed in as another account
+  if (!S.user && h === 'scan') return renderPublicAsset();
   if (!S.user) { if (h && h !== 'login' && h !== 'setup') S.next = location.hash; return renderLogin(); }   // e.g. a scanned QR label
   if (S.user.must_change_password) return renderForcedPassword();
   if (h === 'login' || h === 'setup' || h === 'request-access' || h === '') { return go('#/dashboard'); }
@@ -451,12 +492,14 @@ async function pUsers(el) {
   pageHead(t('users.title'), t('users.sub'), manage ? `<button class="btn sm" id="addu">${ic('plus', 16)}${t('users.add')}</button><button class="btn pri sm" id="invu">${ic('mail', 16)}${t('inv.invite')}</button>` : '');
   const [ur, rr] = await Promise.all([api('/api/users'), api('/api/roles')]);
   const roles = rr.roles;
-  el.innerHTML = `${manage ? '<div id="accq"></div><div id="invq"></div>' : ''}<div class="card"><div class="toolbar"><input class="inp" id="uq" style="max-width:340px" placeholder="${t('common.search')}"><div class="sp"></div><span class="badge mut" id="ucount"></span></div><div id="utbl"></div></div>`;
+  const US = { name: by(u => u.full_name), username: by(u => u.username), role: by(u => nameOf(u, 'role_name')), last_login: by(u => u.last_login_at, true), newest: (a, b) => b.id - a.id };
+  let usort = sortPref('users', 'name', Object.keys(US));
+  el.innerHTML = `${manage ? '<div id="accq"></div><div id="invq"></div>' : ''}<div class="card"><div class="toolbar"><input class="inp" id="uq" style="max-width:340px" placeholder="${t('common.search')}">${sortSel('usort', Object.keys(US), usort)}<div class="sp"></div><span class="badge mut" id="ucount"></span></div><div id="utbl"></div></div>`;
   let list = ur.users;
   if (manage) { accessQueue($('#accq'), roles, () => reload()); inviteQueue($('#invq'), roles); }
   const draw = () => {
     const q = $('#uq').value.trim().toLowerCase();
-    const rows = list.filter(u => !q || (u.username + ' ' + u.full_name + ' ' + u.email).toLowerCase().includes(q));
+    const rows = sortRows(list.filter(u => !q || (u.username + ' ' + u.full_name + ' ' + u.email).toLowerCase().includes(q)), US[usort]);
     $('#ucount').textContent = rows.length + ' / ' + list.length;
     $('#utbl').innerHTML = rows.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>${t('users.user')}</th><th>${t('users.role')}</th><th>${t('users.status')}</th><th>${t('users.last_login')}</th><th></th></tr></thead><tbody>${rows.map(u => `<tr>
       <td><b>${esc(u.full_name)}</b><div class="mono" style="color:var(--mut);font-size:12.5px">${esc(u.username)}${u.email ? ' · ' + esc(u.email) : ''}</div></td>
@@ -492,6 +535,7 @@ async function pUsers(el) {
   const add = $('#addu'); if (add) add.onclick = () => userForm(null);
   const inv = $('#invu'); if (inv) inv.onclick = () => inviteForm(roles, () => inviteQueue($('#invq'), roles));
   $('#uq').addEventListener('input', debounce(draw, 120));
+  $('#usort').onchange = () => { usort = $('#usort').value; sortSave('users', usort); draw(); };
   draw();
 }
 
@@ -831,7 +875,8 @@ function bindSubmit(m, form, send) {
 }
 
 /* ============ assets ============ */
-let AS = { q: '', status: '', category: '', page: 1, sel: new Set(), rows: [] };
+const ASSET_SORTS = ['newest', 'oldest', 'tag', 'tag_desc', 'name', 'category', 'status', 'holder', 'location', 'purchase_new', 'purchase_old', 'cost_high', 'cost_low', 'warranty'];
+let AS = { q: '', status: '', category: '', page: 1, sel: new Set(), rows: [], sort: sortPref('assets', 'newest', ASSET_SORTS) };
 async function pAssets(el) {
   const manage = has('assets.manage');
   pageHead(t('assets.title'), t('assets.sub'), `<button class="btn sm" id="expa">${ic('download', 15)}${t('imp.export')}</button>` +
@@ -841,12 +886,12 @@ async function pAssets(el) {
   <div class="card"><div class="toolbar"><input class="inp" id="aq" style="max-width:300px" placeholder="${t('assets.search')}" value="${esc(AS.q)}">
   <select class="sel" id="ast"><option value="">${t('assets.all_status')}</option>${STATUSES.map(s => `<option value="${s}" ${AS.status === s ? 'selected' : ''}>${esc(t('st.' + s))}</option>`).join('')}</select>
   <select class="sel" id="acat"><option value="">${t('assets.all_cat')}</option>${cl.map(c => `<option value="${c.id}" ${AS.category == c.id ? 'selected' : ''}>${esc(nameOf(c))}</option>`).join('')}</select>
-  <div class="sp"></div><button class="btn sm" id="albl">${ic('qr', 15)}<span></span></button><span class="badge mut" id="acount"></span></div><div id="atbl"><div class="skel">${t('common.loading')}</div></div>
+  ${sortSel('asort', ASSET_SORTS, AS.sort)}<div class="sp"></div><button class="btn sm" id="albl">${ic('qr', 15)}<span></span></button><span class="badge mut" id="acount"></span></div><div id="atbl"><div class="skel">${t('common.loading')}</div></div>
   <div class="toolbar" style="margin:14px 0 0"><button class="btn sm" id="prev">${ic('chev', 14)}</button><span id="pg" class="badge mut"></span><button class="btn sm" id="next">${ic('chev', 14)}</button></div></div>`;
   flipPager();
   const load = async () => {
-    AS.q = $('#aq').value.trim(); AS.status = $('#ast').value; AS.category = $('#acat').value;
-    const r = await api('/api/assets?' + new URLSearchParams({ q: AS.q, status: AS.status, category: AS.category, page: AS.page, per_page: 25 }));
+    AS.q = $('#aq').value.trim(); AS.status = $('#ast').value; AS.category = $('#acat').value; AS.sort = $('#asort').value;
+    const r = await api('/api/assets?' + new URLSearchParams({ q: AS.q, status: AS.status, category: AS.category, sort: AS.sort, page: AS.page, per_page: 25 }));
     if (!$('#atbl')) return;
     const pages = Math.max(1, Math.ceil(r.total / r.per_page));
     if (AS.page > pages) { AS.page = pages; return load(); }
@@ -870,10 +915,11 @@ async function pAssets(el) {
   $('#albl').onclick = () => { const ids = AS.sel.size ? [...AS.sel] : (AS.rows || []).map(a => a.id); if (ids.length) openLabels(ids); };
   const reset = debounce(() => { AS.page = 1; load().catch(fail); }, 250);
   $('#aq').addEventListener('input', reset); $('#ast').onchange = reset; $('#acat').onchange = reset;
+  $('#asort').onchange = () => { sortSave('assets', $('#asort').value); reset(); };
   $('#prev').onclick = () => { AS.page--; load().catch(fail); }; $('#next').onclick = () => { AS.page++; load().catch(fail); };
   const add = $('#adda'); if (add) add.onclick = () => cl.length ? assetForm(null, load) : toast(t('assets.no_categories'), t('assets.no_categories_sub'), 'err');
   const imp = $('#impa'); if (imp) imp.onclick = () => cl.length ? importModal('assets', load) : toast(t('assets.no_categories'), t('assets.no_categories_sub'), 'err');
-  $('#expa').onclick = () => exportFile('/api/export/assets', { q: AS.q, status: AS.status, category: AS.category });
+  $('#expa').onclick = () => exportFile('/api/export/assets', { q: AS.q, status: AS.status, category: AS.category, sort: AS.sort });
   await load();
 }
 
@@ -1009,9 +1055,12 @@ async function pAssignments(el) {
   const asg = has('assignments.manage');
   pageHead(t('asg.title'), t('asg.sub'), `<button class="btn sm" id="expg">${ic('download', 15)}${t('imp.export_history')}</button><a class="btn sm" href="#/assets">${ic('box', 15)}${t('nav.assets')}</a>`);
   $('#expg').onclick = () => exportFile('/api/export/assignments');
-  el.innerHTML = `<div class="card"><div class="toolbar"><input class="inp" id="gq" style="max-width:320px" placeholder="${t('asg.search')}"><div class="sp"></div><span class="badge mut" id="gcount"></span></div><div id="gtbl"><div class="skel">${t('common.loading')}</div></div></div>`;
+  const GS = { overdue: null, newest: by(g => g.assigned_at, true), oldest: by(g => g.assigned_at), due: by(g => g.expected_return), employee: by(g => nameOf(g, 'full_name')),
+    department: by(g => g.dept_en ? nameOf(g, 'dept') : ''), tag: by(g => g.tag) };
+  let gsort = sortPref('assignments', 'overdue', Object.keys(GS));
+  el.innerHTML = `<div class="card"><div class="toolbar"><input class="inp" id="gq" style="max-width:320px" placeholder="${t('asg.search')}">${sortSel('gsort', Object.keys(GS), gsort)}<div class="sp"></div><span class="badge mut" id="gcount"></span></div><div id="gtbl"><div class="skel">${t('common.loading')}</div></div></div>`;
   const load = async () => {
-    const list = (await api('/api/assignments?q=' + encodeURIComponent($('#gq').value.trim()))).assignments;
+    const list = sortRows((await api('/api/assignments?q=' + encodeURIComponent($('#gq').value.trim()))).assignments, GS[gsort]);
     if (!$('#gtbl')) return;
     const od = list.filter(g => g.overdue).length;
     $('#gcount').textContent = list.length + (od ? ' · ' + t('asg.overdue_n', { n: od }) : '');
@@ -1026,6 +1075,7 @@ async function pAssignments(el) {
     $$('#gtbl [data-r]').forEach(b => b.onclick = () => { const g = list.find(x => x.asset_id == b.dataset.r); returnForm({ id: g.asset_id, tag: g.tag, name: g.asset_name, condition: g.condition_out }, load); });
   };
   $('#gq').addEventListener('input', debounce(() => load().catch(fail), 250));
+  $('#gsort').onchange = () => { gsort = $('#gsort').value; sortSave('assignments', gsort); load().catch(fail); };
   await load();
 }
 
@@ -1036,15 +1086,18 @@ async function pEmployees(el) {
   pageHead(t('emp.title'), t('emp.sub'), `<button class="btn sm" id="expe">${ic('download', 15)}${t('imp.export')}</button>` +
     (manage ? `<button class="btn sm" id="impe">${ic('sheet', 15)}${t('imp.import')}</button><button class="btn sm" id="depts">${ic('building', 15)}${t('emp.departments')}</button><button class="btn pri sm" id="adde">${ic('plus', 16)}${t('emp.add')}</button>` : ''));
   let depts = (await api('/api/departments')).departments;
+  const ES = { name: by(e => nameOf(e, 'full_name')), name_desc: by(e => nameOf(e, 'full_name'), true), emp_no: by(e => e.emp_no), department: by(e => e.dept_en ? nameOf(e, 'dept') : ''),
+    holding: (a, b) => (b.holding || 0) - (a.holding || 0) || cmpText(nameOf(a, 'full_name'), nameOf(b, 'full_name')), newest: (a, b) => b.id - a.id };
+  let esort = sortPref('employees', 'name', Object.keys(ES));
   el.innerHTML = `<div class="card"><div class="toolbar"><input class="inp" id="eq" style="max-width:300px" placeholder="${t('emp.search')}" value="${esc(EM.q)}">
   <select class="sel" id="est"><option value="active">${t('emp.st_active')}</option><option value="left">${t('emp.st_left')}</option><option value="">${t('emp.st_all')}</option></select>
-  <select class="sel" id="edp"></select><div class="sp"></div><span class="badge mut" id="ecount"></span></div><div id="etbl"><div class="skel">${t('common.loading')}</div></div></div>`;
+  <select class="sel" id="edp"></select>${sortSel('esort', Object.keys(ES), esort)}<div class="sp"></div><span class="badge mut" id="ecount"></span></div><div id="etbl"><div class="skel">${t('common.loading')}</div></div></div>`;
   $('#est').value = EM.status;
   const drawDepts = () => { $('#edp').innerHTML = `<option value="">${t('emp.all_depts')}</option>` + depts.map(d => `<option value="${d.id}">${esc(nameOf(d))}</option>`).join(''); $('#edp').value = EM.dept; };
   drawDepts();
   const load = async () => {
     EM.q = $('#eq').value.trim(); EM.status = $('#est').value; EM.dept = $('#edp').value;
-    const list = (await api('/api/employees?' + new URLSearchParams({ q: EM.q, status: EM.status, department: EM.dept }))).employees;
+    const list = sortRows((await api('/api/employees?' + new URLSearchParams({ q: EM.q, status: EM.status, department: EM.dept }))).employees, ES[esort]);
     if (!$('#etbl')) return;
     $('#ecount').textContent = list.length;
     $('#etbl').innerHTML = list.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>${t('emp.no')}</th><th>${t('emp.name')}</th><th>${t('emp.department')}</th><th>${t('emp.job')}</th><th>${t('emp.holding')}</th><th>${t('users.status')}</th></tr></thead><tbody>${list.map(e => `<tr class="click" data-id="${e.id}">
@@ -1057,6 +1110,7 @@ async function pEmployees(el) {
   };
   pEmployees.reloadDepts = async () => { depts = (await api('/api/departments')).departments; drawDepts(); };
   $('#eq').addEventListener('input', debounce(() => load().catch(fail), 250)); $('#est').onchange = () => load().catch(fail); $('#edp').onchange = () => load().catch(fail);
+  $('#esort').onchange = () => { esort = $('#esort').value; sortSave('employees', esort); load().catch(fail); };
   const add = $('#adde'); if (add) add.onclick = () => employeeForm(null, depts, load);
   const dp = $('#depts'); if (dp) dp.onclick = () => departmentsModal(async () => { await pEmployees.reloadDepts(); await load(); });
   const imp = $('#impe'); if (imp) imp.onclick = () => importModal('employees', async () => { await pEmployees.reloadDepts(); await load(); });
@@ -1660,12 +1714,15 @@ let MN = { status: 'active', q: '' };
 async function pMaintenance(el) {
   const manage = has('maintenance.manage');
   pageHead(t('mnt.title'), t('mnt.sub'), manage ? `<button class="btn pri sm" id="addm">${ic('plus', 16)}${t('mnt.add')}</button>` : '');
+  const mDate = r => r.status === 'scheduled' ? r.scheduled_for : (r.completed_at || r.started_at || r.created_at);
+  const MS = { urgent: null, date_new: by(mDate, true), date_old: by(mDate), cost_high: by(r => r.cost, true), tag: by(r => r.tag) };
+  let msort = sortPref('maintenance', 'urgent', Object.keys(MS));
   el.innerHTML = `<div class="card"><div class="toolbar"><input class="inp" id="mq" style="max-width:300px" placeholder="${t('mnt.search')}" value="${esc(MN.q)}">
     <select class="sel" id="mst">${['active', 'scheduled', 'open', 'done', 'cancelled', ''].map(s => `<option value="${s}" ${MN.status === s ? 'selected' : ''}>${t(s ? 'mnt.f_' + s : 'mnt.f_all')}</option>`).join('')}</select>
-    <div class="sp"></div><span class="badge mut" id="mcount"></span></div><div id="mtbl"><div class="skel">${t('common.loading')}</div></div></div>`;
+    ${sortSel('msort', Object.keys(MS), msort)}<div class="sp"></div><span class="badge mut" id="mcount"></span></div><div id="mtbl"><div class="skel">${t('common.loading')}</div></div></div>`;
   const load = async () => {
     MN.q = $('#mq').value.trim(); MN.status = $('#mst').value;
-    const list = (await api('/api/maintenance?' + new URLSearchParams({ status: MN.status, q: MN.q }))).maintenance;
+    const list = sortRows((await api('/api/maintenance?' + new URLSearchParams({ status: MN.status, q: MN.q }))).maintenance, MS[msort]);
     if (!$('#mtbl')) return;
     $('#mcount').textContent = list.length;
     $('#mtbl').innerHTML = list.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>${t('assets.status')}</th><th>${t('assets.asset')}</th><th>${t('mnt.kind')}</th><th>${t('mnt.title_f')}</th><th>${t('rep.date')}</th><th class="num">${t('mnt.cost')}</th><th></th></tr></thead><tbody>${list.map(r => `<tr class="click" data-a="${r.asset_id}">
@@ -1679,6 +1736,7 @@ async function pMaintenance(el) {
     $$('#mtbl tr.click').forEach(tr => tr.onclick = ev => { if (ev.target.closest('button')) return; assetDetail(+tr.dataset.a, load); });
   };
   $('#mq').addEventListener('input', debounce(() => load().catch(fail), 250)); $('#mst').onchange = () => load().catch(fail);
+  $('#msort').onchange = () => { msort = $('#msort').value; sortSave('maintenance', msort); load().catch(fail); };
   const add = $('#addm'); if (add) add.onclick = () => maintenanceForm(null, null, load);
   await load();
 }
@@ -1834,6 +1892,7 @@ async function settingsCard(box) {
     <div class="fld full"><label class="cb"><input type="checkbox" id="f-access_requests_enabled" ${s.access_requests_enabled ? 'checked' : ''}${dis}> ${ic('user', 16)} ${t('set.access_requests')}</label><div class="hint">${t('set.access_requests_hint')}</div></div>
     ${field('access_allowed_domains', t('set.domains'), inp('access_allowed_domains', (s.access_allowed_domains || []).join(', '), 'dir="ltr" autocomplete="off" autocapitalize="off" placeholder="mycompany.com, mycompany.com.eg"' + dis), { full: true, hint: t('set.domains_hint') })}
     <div class="fld full"><label class="cb"><input type="checkbox" id="f-asset_requests_enabled" ${s.asset_requests_enabled ? 'checked' : ''}${dis}> ${ic('inbox', 16)} ${t('set.asset_requests')}</label><div class="hint">${t('set.asset_requests_hint')}</div></div>
+    <div class="fld full"><label class="cb"><input type="checkbox" id="f-public_scan_enabled" ${s.public_scan_enabled ? 'checked' : ''}${dis}> ${ic('qr', 16)} ${t('set.public_scan')}</label><div class="hint">${t('set.public_scan_hint')}</div></div>
     <div class="fld full"><label class="cb"><input type="checkbox" id="f-email_enabled" ${s.email_enabled ? 'checked' : ''}${dis}> ${ic('mail', 16)} ${t('set.email_enabled')}</label><div class="hint">${t('set.email_hint')}</div></div>
     ${field('smtp_host', t('set.smtp_host'), inp('smtp_host', s.smtp_host, 'dir="ltr" placeholder="smtp.office365.com"' + dis))}
     ${field('smtp_port', t('set.smtp_port'), inp('smtp_port', s.smtp_port, 'type="number" dir="ltr"' + dis))}
@@ -1844,7 +1903,7 @@ async function settingsCard(box) {
     ${field('smtp_from', t('set.smtp_from'), inp('smtp_from', s.smtp_from, 'dir="ltr" placeholder="assets@mycompany.com"' + dis), { full: true })}
     </div>${manage ? `<div class="toolbar" style="margin:20px 0 0"><button class="btn pri" type="submit">${t('common.save')}</button><div class="sp"></div><button class="btn sm" type="button" id="set-test">${ic('mail', 15)}${t('set.test')}</button><button class="btn sm" type="button" id="set-digest">${t('set.digest_now')}</button></div><div id="set-status" role="status" aria-live="polite"></div>` : ''}</form>`;
   if (!manage) return;
-  const body = () => { const b = {}; ['public_url', 'alert_warranty_days', 'alert_maintenance_days', 'smtp_host', 'smtp_port', 'smtp_security', 'digest_hour', 'smtp_user', 'smtp_password', 'smtp_from', 'access_allowed_domains'].forEach(k => b[k] = fv(box, k)); b.email_enabled = $('#f-email_enabled', box).checked; b.access_requests_enabled = $('#f-access_requests_enabled', box).checked; b.asset_requests_enabled = $('#f-asset_requests_enabled', box).checked; return b; };
+  const body = () => { const b = {}; ['public_url', 'alert_warranty_days', 'alert_maintenance_days', 'smtp_host', 'smtp_port', 'smtp_security', 'digest_hour', 'smtp_user', 'smtp_password', 'smtp_from', 'access_allowed_domains'].forEach(k => b[k] = fv(box, k)); b.email_enabled = $('#f-email_enabled', box).checked; b.access_requests_enabled = $('#f-access_requests_enabled', box).checked; b.asset_requests_enabled = $('#f-asset_requests_enabled', box).checked; b.public_scan_enabled = $('#f-public_scan_enabled', box).checked; return b; };
   $('#setf', box).onsubmit = async e => { e.preventDefault(); try { await api('/api/settings', { method: 'PUT', body: body() }); toast(t('toast.saved')); settingsCard(box); api('/api/branding').then(b => { const re = S.brand && S.brand.asset_requests !== b.asset_requests; S.brand = b; if (re) render(); }).catch(() => { }); } catch (err) { if (!showErrors(box, err)) fail(err); } };
   // the test can take up to ~20 s when the server does not answer, so the result stays on screen (not only a toast)
   const status = (kind, icon, html) => { $('#set-status', box).innerHTML = kind ? `<div class="banner ${kind}" style="margin:14px 0 0">${ic(icon, 18)}<div>${html}</div></div>` : ''; };
