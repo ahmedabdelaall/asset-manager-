@@ -287,7 +287,7 @@ def import_employees(ctx):
 def import_assets(ctx):
     q = ctx.query
     return transfer.import_assets(ctx, ctx.body, _fname(ctx), q.get("dry_run", "1") == "1", q.get("update") == "1",
-                                  _mapping(ctx), _int(q, "sheet", 0), q.get("category", ""))
+                                  _mapping(ctx), _int(q, "sheet", 0), q.get("category", ""), q.get("add_people") == "1")
 
 
 @route("GET", "/api/export/assets", perm="assets.view")

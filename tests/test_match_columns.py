@@ -95,6 +95,41 @@ class TestMatchColumns(InvBase):
         self.assertEqual([e["code"] for e in r["errors"]], ["employee_ambiguous", "employee_not_found"])
         self.assertEqual([e["column"] for e in r["errors"]], ["assigned_to", "assigned_to"])
 
+    def test_phone_lines_with_national_ids(self):
+        """A mobile-lines register: no name column, holders given by name + national ID, some not employees yet."""
+        c = self.setup_inventory()
+        s, js, _ = c.post("/api/categories", {"code": "SIM", "name_en": "Mobile lines", "name_ar": "خطوط المحمول",
+                                              "fields": [{"label_en": "Phone number", "type": "text", "required": True, "unique": True}]})
+        c.post("/api/employees", {"emp_no": "NDS-007", "full_name_en": "Old Person", "national_id": "29903030100882"})
+        data = book(("Lines", [["Mobile lines register"], [],
+                               ["Employee Name", "National ID", "Receipt Date", "Phone Number"],
+                               ["Someone Renamed", "29903030100882", "11/10/2025", "01026261465"],
+                               ["بسمه محمد السيد كمال", "30309202106906", "28/10/2025", "01095575776"],
+                               ["بسمه محمد السيد كمال", "30309202106906", "28/10/2025", "01020096000"]]))
+        cols = self.columns(c, "assets", data)[1]["columns"]
+        self.assertEqual([x["suggested"] for x in cols], ["assigned_to", "holder_national_id", "assigned_on", "phone_number"])
+        mapping = {str(x["index"]): x["suggested"] for x in cols}
+        # without "add holders" the new person is refused
+        r = self.imp(c, "assets", data, mapping, category="SIM")[1]
+        self.assertEqual([e["code"] for e in r["errors"]], ["employee_not_found", "employee_not_found"])
+        q = urllib.parse.urlencode({"dry_run": 0, "category": "SIM", "add_people": 1})
+        s, r, _ = c.post("/api/import/assets?" + q, raw=data,
+                         headers={"X-Filename": "f.xlsx", "X-Mapping": urllib.parse.quote(json.dumps(mapping))})
+        self.assertTrue(r["committed"], r)
+        self.assertEqual(r["employees_created"], ["بسمه محمد السيد كمال"])                 # added once, holds two lines
+        lines = {a["custom"]["phone_number"]: a for a in c.get("/api/assets?category=%d" % js["id"])[1]["assets"]}
+        self.assertEqual(lines["01026261465"]["name"], "Mobile lines 01026261465")
+        self.assertEqual(lines["01026261465"]["holder_no"], "NDS-007")                     # found by national ID, not name
+        self.assertEqual(lines["01095575776"]["holder_no"], "NDS-008")                     # numbering continues
+        self.assertEqual(lines["01020096000"]["holder_no"], "NDS-008")
+        self.assertEqual(lines["01095575776"]["assigned_at"][:10], "2025-10-28")
+        emp = [e for e in c.get("/api/employees")[1]["employees"] if e["emp_no"] == "NDS-008"][0]
+        self.assertEqual((emp["full_name_ar"], emp["has_national_id"]), ("بسمه محمد السيد كمال", True))
+        # a bad national ID is reported on that column
+        bad = book(("L", [["Employee Name", "National ID", "Phone Number"], ["X Y", "12", "0100"]]))
+        r = self.imp(c, "assets", bad, {"0": "assigned_to", "1": "holder_national_id", "2": "phone_number"}, category="SIM")[1]
+        self.assertEqual(r["errors"][0]["column"], "holder_national_id")
+
     def test_permissions(self):
         c = self.setup_inventory()
         self.make_user(c, "view1", "viewer")

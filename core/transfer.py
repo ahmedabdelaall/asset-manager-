@@ -22,7 +22,8 @@ WEB_I18N = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "i18n
 EMP_COLS = ["emp_no", "full_name_en", "full_name_ar", "department", "job_title", "email", "phone", "national_id", "status", "notes"]
 ASSET_COLS = ["category_code", "tag", "name", "brand", "model", "serial_no", "condition", "location", "purchase_date",
               "purchase_cost", "supplier", "warranty_until", "notes", "assigned_to", "assigned_on"]
-REQUIRED = {"emp_no", "category_code", "name"}
+ASSET_IMPORT_EXTRA = ["holder_national_id"]                 # import only (not exported)
+REQUIRED = {"emp_no", "category_code"}                       # an asset without a name gets one from its category
 MAX_ERRORS = 300
 
 _DICTS = {}
@@ -215,6 +216,9 @@ SYNONYMS = {
     "assigned_to": ["assigned to", "holder", "user", "employee", "custodian", "received by", "receiver", "owner",
                     "employee name", "employee no", "staff", "used by", "المستلم", "الموظف", "المستخدم", "اسم المستلم",
                     "العهدة", "مستلم العهدة", "اسم الموظف", "صاحب العهدة"],
+    "holder_national_id": ["national id", "nid", "id number", "national number", "national no", "civil id",
+                           "holder national id", "employee national id", "الرقم القومي", "رقم قومي", "رقم البطاقة",
+                           "البطاقة", "رقم الهوية", "الرقم القومي للمستلم"],
     "assigned_on": ["assigned on", "handover date", "assignment date", "date assigned", "issue date", "delivery date",
                     "received on", "date", "تاريخ التسليم", "تاريخ الاستلام", "تاريخ العهدة"],
 }
@@ -224,7 +228,7 @@ FIELD_LABEL = {"emp_no": "emp.no", "full_name_en": "emp.name_en", "full_name_ar"
                "name": "assets.name", "brand": "assets.brand", "model": "assets.model", "serial_no": "assets.serial",
                "condition": "assets.condition", "location": "assets.location", "purchase_date": "assets.purchase_date",
                "purchase_cost": "assets.cost", "supplier": "assets.supplier", "warranty_until": "assets.warranty",
-               "assigned_to": "imp.f_assigned_to", "assigned_on": "imp.f_assigned_on"}
+               "assigned_to": "imp.f_assigned_to", "assigned_on": "imp.f_assigned_on", "holder_national_id": "imp.f_holder_nid"}
 _ARABIC = re.compile(r"[\u0600-\u06ff]")
 
 
@@ -233,8 +237,8 @@ def _fields(db, kind):
     if kind == "employees":
         cols = [(c, None) for c in EMP_COLS]
     else:
-        cols = [(c, None) for c in ASSET_COLS]
-        seen = set(ASSET_COLS)
+        cols = [(c, None) for c in ASSET_COLS + ASSET_IMPORT_EXTRA]
+        seen = set(ASSET_COLS + ASSET_IMPORT_EXTRA)
         for cat in inv.list_categories(db):
             for f in cat["fields"]:
                 if f["key"] not in seen:
@@ -435,7 +439,26 @@ def _custom_keys(db):
     return keys
 
 
-def import_assets(ctx, data, filename, dry_run=True, update=False, mapping=None, sheet=0, default_category=""):
+def _next_emp_no(db):
+    """Continue the company's own numbering (NDS-040 -> NDS-041); EMP-0001 when there is none yet."""
+    best = {}
+    for r in db.query("SELECT id, emp_no FROM employees ORDER BY id"):
+        m = re.fullmatch(r"(.*?)(\d+)", r["emp_no"])
+        if m:
+            p, n = m.group(1), m.group(2)
+            cnt, top, width, _ = best.get(p, (0, 0, len(n), 0))
+            best[p] = (cnt + 1, max(top, int(n)), max(width, len(n)), r["id"])
+    if not best:
+        prefix, top, width = "EMP-", 0, 4
+    else:                                                    # the most used numbering; on a tie, the latest one
+        prefix, (_, top, width, _) = max(best.items(), key=lambda kv: (kv[1][0], kv[1][3]))
+    n = top + 1
+    while db.one("SELECT 1 FROM employees WHERE emp_no=?", ("%s%0*d" % (prefix, width, n),)):
+        n += 1
+    return "%s%0*d" % (prefix, width, n)
+
+
+def import_assets(ctx, data, filename, dry_run=True, update=False, mapping=None, sheet=0, default_category="", add_people=False):
     db = ctx.db
     header, rows, first, _ = _parse(data, filename, sheet)
     custom_keys = [k for k in _custom_keys(db) if k not in ASSET_COLS]
@@ -443,7 +466,7 @@ def import_assets(ctx, data, filename, dry_run=True, update=False, mapping=None,
     default_category = (default_category or "").strip().upper()
     if default_category and default_category not in cats:
         raise ApiError(422, "category_not_found", "Unknown category code", field="category_code")
-    idx, ignored = _map(header, ASSET_COLS + custom_keys, mapping,
+    idx, ignored = _map(header, ASSET_COLS + ASSET_IMPORT_EXTRA + custom_keys, mapping,
                         REQUIRED - {"category_code"} if default_category else REQUIRED)
     cat_names = {}                                        # the category column may hold a code or a name (English/Arabic)
     for c in cats.values():
@@ -451,10 +474,19 @@ def import_assets(ctx, data, filename, dry_run=True, update=False, mapping=None,
             if _norm(n):
                 cat_names.setdefault(_norm(n), c)
     cond_map = _reverse("cond.", inv.CONDITIONS)
-    people = {}
+    people, added = {}, []
 
-    def holder_id(v):
-        """The holder column may hold an employee number or a full name (English or Arabic)."""
+    def holder_id(v, nid=""):
+        """Find the holder by national ID, employee number or full name (English or Arabic). With add_people, someone
+        who is not in the system yet is added from the name and national ID in the sheet."""
+        if nid:
+            e = db.one("SELECT id FROM employees WHERE national_id=?", (nid,))
+            if e:
+                return e["id"]
+        if not v:
+            if nid and not add_people:
+                raise ApiError(422, "employee_nid_not_found", "No employee has this national ID", field="holder_national_id")
+            raise ApiError(422, "field_required", "Give the holder's name for a new employee", field="assigned_to")
         e = db.one("SELECT id FROM employees WHERE emp_no=?", (v,))
         if e:
             return e["id"]
@@ -468,8 +500,24 @@ def import_assets(ctx, data, filename, dry_run=True, update=False, mapping=None,
         if len(ids) > 1:
             raise ApiError(422, "employee_ambiguous", "More than one employee has this name - use the employee number", field="assigned_to")
         if not ids:
-            raise ApiError(422, "employee_not_found", "No employee with this number or name", field="assigned_to")
+            if not add_people:
+                raise ApiError(422, "employee_not_found", "No employee with this number or name", field="assigned_to")
+            arabic = bool(_ARABIC.search(v))
+            eid = inv.save_employee(ctx, None, {"emp_no": _next_emp_no(db), "full_name_en": "" if arabic else v,
+                                                "full_name_ar": v if arabic else "", "national_id": nid, "status": "active"})
+            people.setdefault(_norm(v), set()).add(eid)
+            added.append(v)
+            return eid
         return next(iter(ids))
+
+    def auto_name(cat, body):
+        """'Mobile lines 01026261465': the category name and what identifies the item (serial, or a unique field)."""
+        ident = body.get("serial_no") or ""
+        for f in sorted(cat["fields"], key=lambda f: not f.get("unique")):
+            if not ident and _s(body["custom"].get(f["key"])):
+                ident = _s(body["custom"].get(f["key"]))
+        base = cat["name_en"] or cat["name_ar"] or cat["code"]
+        return (base + " " + ident).strip()[:200]
 
     def handle(row):
         cell = lambda c: _s(row[idx[c]]) if c in idx and idx[c] < len(row) else None
@@ -513,13 +561,20 @@ def import_assets(ctx, data, filename, dry_run=True, update=False, mapping=None,
                 body["custom"][f["key"]] = _date(v)
             else:
                 body["custom"][f["key"]] = _s(v)
+        if not _s(body.get("name")):
+            body["name"] = auto_name(cat, body)
         if old:
             inv.update_asset(ctx, old["id"], body)
             return "updated"
+        holder, nid = cell("assigned_to") or "", ""
+        if cell("holder_national_id"):
+            try:
+                nid = inv.national_id({"national_id": cell("holder_national_id")})
+            except ApiError as e:
+                raise ApiError(e.status, e.code, e.message, field="holder_national_id")
         aid, _ = inv.create_asset(ctx, body)
-        holder = cell("assigned_to")
-        if holder:
-            inv.assign(ctx, aid, {"employee_id": holder_id(holder)}, at=_date(raw("assigned_on")) or None)
+        if holder or nid:
+            inv.assign(ctx, aid, {"employee_id": holder_id(holder, nid)}, at=_date(raw("assigned_on")) or None)
         elif cell("assigned_on"):
             raise ApiError(422, "field_required", "assigned_on needs assigned_to", field="assigned_to")
         return "created"
@@ -528,6 +583,7 @@ def import_assets(ctx, data, filename, dry_run=True, update=False, mapping=None,
     if res["committed"] and mapping is not None:
         remember_layout(db, "assets", header, mapping)
     res["ignored_columns"] = ignored
+    res["employees_created"] = sorted(set(added))
     return res
 
 
@@ -543,12 +599,14 @@ HELP = {
     "status": ("active or left (empty = active)", "active أو left (فارغ = نشط)"), "notes": ("Notes", "ملاحظات"),
     "category_code": ("Category code, e.g. LAP (required)", "رمز التصنيف مثل LAP (إلزامي)"),
     "tag": ("Asset tag - leave empty to generate automatically", "رمز الأصل - اتركه فارغاً ليُنشأ تلقائياً"),
-    "name": ("Asset name / description (required)", "اسم الأصل / الوصف (إلزامي)"),
+    "name": ("Asset name / description - empty: category name + serial number", "اسم الأصل / الوصف - فارغ: اسم التصنيف + الرقم التسلسلي"),
     "brand": ("Brand", "الماركة"), "model": ("Model", "الموديل"), "serial_no": ("Serial number - must be unique", "الرقم التسلسلي - يجب أن يكون فريداً"),
     "condition": ("new, good, fair, poor or damaged (empty = good)", "new أو good أو fair أو poor أو damaged (فارغ = جيد)"),
     "location": ("Location", "الموقع"), "purchase_date": ("Date, e.g. 2026-03-31", "تاريخ مثل 2026-03-31"),
     "purchase_cost": ("Number", "رقم"), "supplier": ("Supplier", "المورّد"), "warranty_until": ("Date, e.g. 2028-03-31", "تاريخ مثل 2028-03-31"),
     "assigned_to": ("Employee number - the new asset is assigned to this employee", "الرقم الوظيفي - يُسلَّم الأصل الجديد لهذا الموظف"),
+    "holder_national_id": ("National ID of the holder - finds the employee (or, with 'add employees', creates them)",
+                           "الرقم القومي للمستلم - للعثور على الموظف (أو إضافته عند اختيار «إضافة الموظفين»)"),
     "assigned_on": ("Handover date for assigned_to, e.g. 2025-03-31 or 31/3/2025 (empty = today; cannot be in the future)",
                     "تاريخ التسليم لـ assigned_to، مثل 2025-03-31 أو 31/3/2025 (فارغ = اليوم، ولا يكون في المستقبل)"),
 }
@@ -563,7 +621,7 @@ def template(db, kind, lang):
                            {"name": _t(lang, "imp.help"), "rows": help_rows, "rtl": lang == "ar", "widths": [22, 80]}])
     cats = inv.list_categories(db)
     custom = [k for k in _custom_keys(db) if k not in ASSET_COLS]
-    help_rows = [head] + [[c + (" *" if c in REQUIRED else ""), HELP[c][li]] for c in ASSET_COLS]
+    help_rows = [head] + [[c + (" *" if c in REQUIRED else ""), HELP[c][li]] for c in ASSET_COLS + ASSET_IMPORT_EXTRA]
     cat_rows = [[_t(lang, "cat.code"), _t(lang, "cat.name"), _t(lang, "imp.col"), _t(lang, "imp.field_label"),
                  _t(lang, "imp.field_type"), _t(lang, "imp.options"), _t(lang, "cat.required")]]
     for c in cats:
@@ -573,7 +631,7 @@ def template(db, kind, lang):
         for f in c["fields"]:
             cat_rows.append([c["code"], nm, f["key"], f["label_ar"] if lang == "ar" else f["label_en"], _t(lang, "ft." + f["type"]),
                              ", ".join(f["options"]), _t(lang, "common.yes") if f["required"] else ""])
-    return xlsx.write([{"name": _t(lang, "nav.assets"), "rows": [ASSET_COLS + custom], "rtl": lang == "ar"},
+    return xlsx.write([{"name": _t(lang, "nav.assets"), "rows": [ASSET_COLS + ASSET_IMPORT_EXTRA + custom], "rtl": lang == "ar"},
                        {"name": _t(lang, "imp.help"), "rows": help_rows, "rtl": lang == "ar", "widths": [22, 80]},
                        {"name": _t(lang, "nav.categories"), "rows": cat_rows, "rtl": lang == "ar"}])
 

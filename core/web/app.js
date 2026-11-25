@@ -1265,7 +1265,7 @@ function exportFile(path, params = {}) { location.href = path + '?' + new URLSea
 /* Excel import. Any layout works: the app finds the header row, suggests which field each column holds (from common
    English/Arabic names and from earlier imports) and the person confirms or corrects it in the Match columns table. */
 function importModal(kind, done) {
-  let file = null, info = null, map = {}, sheet = 0, defCat = '';
+  let file = null, info = null, map = {}, sheet = 0, defCat = '', addPeople = true;
   const keyCol = kind === 'employees' ? 'emp_no' : 'tag';
   const m = modal(`<h2>${t('imp.title_' + kind)}</h2><div class="sub">${t('imp.sub')}</div>
     <div class="steps"><div class="step"><b>1</b><div class="grow">${t('imp.step1_any')}</div><a class="btn sm" href="/api/import/template?type=${kind}&lang=${LANG}">${ic('download', 15)}${t('imp.template')}</a></div>
@@ -1278,13 +1278,14 @@ function importModal(kind, done) {
   const label = k => { const f = info && info.fields.find(x => x.key === k); return f ? nameOf(f, 'label') : k; };
   const missing = () => !info ? [] : info.fields.filter(f => f.required && !(f.key === 'category_code' && defCat) && !Object.values(map).includes(f.key)).map(f => f.key);
   const reset = () => { go.disabled = true; go.textContent = t('imp.go'); res.innerHTML = ''; chk.disabled = !file || !info || missing().length > 0; };
-  const send = dry => api(`/api/import/${kind}?` + new URLSearchParams({ dry_run: dry ? 1 : 0, update: $('#imp-upd', m).checked ? 1 : 0, sheet, category: defCat }),
+  const send = dry => api(`/api/import/${kind}?` + new URLSearchParams({ dry_run: dry ? 1 : 0, update: $('#imp-upd', m).checked ? 1 : 0, sheet, category: defCat, add_people: addPeople ? 1 : 0 }),
     { method: 'POST', raw: file, headers: { 'X-Filename': encodeURIComponent(file.name), 'X-Mapping': encodeURIComponent(JSON.stringify(map)) } });
   const banner = (cls, html) => `<div class="banner ${cls}" style="margin:16px 0 0">${ic(cls === 'good' ? 'check' : 'warn', 20)}<div class="grow">${html}</div></div>`;
   const show = r => {
     const ok = !r.error_count;
     res.innerHTML = banner(ok ? 'good' : 'bad', `<b>${ok ? t('imp.ready', { n: r.total }) : t('imp.has_errors', { n: r.error_count, total: r.total })}</b>${t('imp.summary', { c: r.created, u: r.updated })}`) + `
       ${r.departments_created && r.departments_created.length ? `<div class="mut" style="margin-top:10px">${t('imp.new_depts')}: <b>${esc(r.departments_created.join('، '))}</b></div>` : ''}
+      ${r.employees_created && r.employees_created.length ? `<div class="mut" style="margin-top:10px">${esc(t('imp.new_people', { n: r.employees_created.length }))}: <b>${esc(r.employees_created.join('، '))}</b></div>` : ''}
       ${r.errors.length ? `<div class="tscroll" style="max-height:280px;margin-top:12px"><table class="tbl"><thead><tr><th>${t('imp.row')}</th><th>${t('imp.col')}</th><th>${t('imp.problem')}</th></tr></thead><tbody>${r.errors.map(e => `<tr><td class="mono">${e.row}</td><td>${esc(e.column ? label(e.column) : '—')}</td><td>${esc(errText(e))}</td></tr>`).join('')}</tbody></table></div>${r.error_count > r.errors.length ? `<div class="mut" style="margin-top:6px">${t('imp.more_errors', { n: r.error_count - r.errors.length })}</div>` : ''}` : ''}`;
   };
   const opts = cur => `<option value="">${esc(t('imp.skip'))}</option>` + info.fields.map(f => `<option value="${esc(f.key)}" ${f.key === cur ? 'selected' : ''}>${esc(nameOf(f, 'label'))}${f.required ? ' *' : ''}</option>`).join('');
@@ -1296,6 +1297,7 @@ function importModal(kind, done) {
       ${info.sheets.length > 1 ? `<label class="sortsel">${esc(t('imp.sheet'))}<select class="sel" id="imp-sheet">${info.sheets.map((n, i) => `<option value="${i}" ${i === sheet ? 'selected' : ''}>${esc(n || '#' + (i + 1))}</option>`).join('')}</select></label>` : ''}</div>
       <div class="mut" style="font-size:12.5px;margin:6px 0 8px">${esc(t('imp.header_at', { r: info.header_row, n: info.rows }))}</div>
       ${kind === 'assets' ? `<div class="fld" style="margin:0 0 10px;max-width:420px"><label for="imp-cat">${t('imp.cat_all')}</label><select id="imp-cat"><option value="">${esc(t('imp.cat_from_col'))}</option>${cl.map(c => `<option value="${esc(c.code)}" ${c.code === defCat ? 'selected' : ''}>${esc(nameOf(c))} (${esc(c.code)})</option>`).join('')}</select><div class="hint">${t('imp.cat_all_hint')}</div></div>` : ''}
+      ${kind === 'assets' && (Object.values(map).includes('assigned_to') || Object.values(map).includes('holder_national_id')) ? `<div class="fld full" style="margin:0 0 10px"><label class="cb" style="min-height:0"><input type="checkbox" id="imp-people" ${addPeople ? 'checked' : ''}> ${t('imp.add_people')}</label><div class="hint">${t('imp.add_people_hint')}</div></div>` : ''}
       <div class="tscroll" style="max-height:340px"><table class="tbl maptbl"><thead><tr><th>${t('imp.col_file')}</th><th>${t('imp.examples')}</th><th>${t('imp.goes_to')}</th></tr></thead><tbody>
       ${info.columns.map(c => `<tr class="${map[c.index] ? '' : 'skipped'}"><td><b>${esc(c.header || '(' + t('imp.no_heading') + ')')}</b></td><td class="mut ex">${c.samples.length ? c.samples.map(esc).join(' · ') : '—'}</td>
         <td><select class="sel" data-col="${c.index}">${opts(map[c.index] || '')}</select></td></tr>`).join('')}</tbody></table></div>
@@ -1307,6 +1309,7 @@ function importModal(kind, done) {
       map[col] = v; drawMap().then(reset);
     });
     const cs = $('#imp-cat', box); if (cs) cs.onchange = () => { defCat = cs.value; drawMap().then(reset); };
+    const ap = $('#imp-people', box); if (ap) ap.onchange = () => { addPeople = ap.checked; reset(); };
     const sh = $('#imp-sheet', box); if (sh) sh.onchange = () => { sheet = +sh.value; load(); };
   };
   const load = async () => {

@@ -1178,5 +1178,10 @@
  "err.mapping_duplicate": "Two columns go to the same field.",
  "err.mapping_unknown_field": "One of the chosen fields does not exist any more. Reload and try again.",
  "err.employee_ambiguous": "More than one employee has this name. Use the employee number.",
- "err.sheet_not_found": "That sheet is not in the file."
+ "err.sheet_not_found": "That sheet is not in the file.",
+ "imp.f_holder_nid": "Holder's national ID",
+ "imp.add_people": "Add holders who are not employees in the system yet",
+ "imp.add_people_hint": "Uses the holder's name and national ID from the sheet; the employee number continues your numbering. Holders are found by national ID first, then by employee number or name.",
+ "imp.new_people": "{n} new employees will be added",
+ "err.employee_nid_not_found": "No employee has this national ID. Tick “Add holders” or give the holder's name."
 }
