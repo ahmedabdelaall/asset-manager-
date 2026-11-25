@@ -12,7 +12,7 @@ import urllib.parse
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import VERSION, audit, rbac, company, licensing, security, backup, access, notify
+from . import VERSION, audit, rbac, company, licensing, security, backup, access, notify, invites
 from . import health as health_checks          # not "health": that name is the /api/health route below
 from .auth import Auth
 from .backup import BackupScheduler
@@ -93,6 +93,7 @@ class App:
         from .auth import IpLimiter
         self.setup_limiter = IpLimiter()
         self.access_limiter = IpLimiter(window=3600, maximum=5)     # public "request access" form: 5 per IP per hour
+        self.invite_limiter = IpLimiter(window=600, maximum=20)     # invitation links: 20 wrong links per IP per 10 minutes
 
     def needs_setup(self):
         return self.db.one("SELECT COUNT(*) c FROM users")["c"] == 0
@@ -543,6 +544,37 @@ def access_approve(ctx):
 @route("POST", "/api/access-requests/<int:id>/reject", perm="users.manage")
 def access_reject(ctx):
     return access.reject(ctx, int(ctx.params["id"]))
+
+
+# ---------------------------------------------------------------- invitations
+@route("GET", "/api/invites", perm="users.manage")
+def invites_list(ctx):
+    return invites.list_invites(ctx.db, ctx.query.get("view", "open"))
+
+
+@route("POST", "/api/invites", perm="users.manage")
+def invites_create(ctx):
+    return 201, invites.create(ctx)
+
+
+@route("POST", "/api/invites/<int:id>/resend", perm="users.manage")
+def invites_resend(ctx):
+    return invites.resend(ctx, int(ctx.params["id"]))
+
+
+@route("POST", "/api/invites/<int:id>/revoke", perm="users.manage")
+def invites_revoke(ctx):
+    return invites.revoke(ctx, int(ctx.params["id"]))
+
+
+@route("POST", "/api/invite/check", public=True, csrf=False, lic=False)
+def invite_check(ctx):
+    return invites.check(ctx)
+
+
+@route("POST", "/api/invite/accept", public=True, csrf=False, lic=False)
+def invite_accept(ctx):
+    return invites.accept(ctx)
 
 
 # ---------------------------------------------------------------- roles

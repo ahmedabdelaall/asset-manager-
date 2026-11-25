@@ -242,6 +242,40 @@ function renderRequestAccess() {
     } catch (err) { b.disabled = false; if (!showErrors(f, err)) fail(err); }
   };
 }
+/* invitation link (public): #/invite?t=<secret>. The person chooses a password; the role was chosen by the administrator */
+async function renderInvite() {
+  const token = new URLSearchParams(location.hash.split('?')[1] || '').get('t') || '';
+  const shell = inner => { $('#root').innerHTML = `<div class="auth">${authTools()}<div class="box">${inner}</div></div>`; bindTools(); };
+  const dead = err => shell(`<div class="head">${logoHTML()}<h1>${esc(companyName() || appName())}</h1><p>${esc(appName())}</p></div>
+    <div class="card done-card" role="alert">${ic('warn', 40)}<h3>${t('inv.dead_title')}</h3><p>${esc(errText(err))}</p><p class="mut">${t('inv.dead_text')}</p><a class="btn pri" href="#/login">${t('acc.back')}</a></div>`);
+  shell(`<div class="skel">${t('common.loading')}</div>`);
+  let inv;
+  try { inv = await api('/api/invite/check', { method: 'POST', body: { token } }); } catch (err) { return dead(err); }
+  const cname = (LANG === 'ar' ? (inv.company_ar || inv.company_en) : (inv.company_en || inv.company_ar)) || companyName() || appName();
+  shell(`<div class="head">${logoHTML()}<h1>${esc(t('inv.welcome', { company: cname }))}</h1><p>${esc(t('inv.welcome_sub', { role: nameOf(inv, 'role_name') }))}</p></div>
+  <form class="card" id="jf" novalidate><div class="grid" style="gap:14px">
+  ${field('email', t('users.email'), inp('email', inv.email, 'type="email" dir="ltr" readonly'))}
+  ${field('full_name', t('users.full_name'), inp('full_name', inv.full_name, 'autocomplete="name" maxlength="120"'), { req: true })}
+  ${field('username', t('login.username'), inp('username', inv.suggested, `dir="ltr" autocomplete="username" autocapitalize="off" maxlength="40" ${inv.username ? 'readonly' : ''}`), { req: true, hint: inv.username ? t('inv.username_fixed') : t('users.username_hint') })}
+  ${field('password', t('pw.new'), inp('password', '', 'type="password" autocomplete="new-password" dir="ltr"'), { req: true, hint: t('password.policy') })}
+  ${field('password2', t('pw.confirm'), inp('password2', '', 'type="password" autocomplete="new-password" dir="ltr"'), { req: true })}
+  <button class="btn pri" type="submit" id="jbtn">${t('inv.join')}</button></div></form>`);
+  $('#f-password').focus();
+  $('#jf').onsubmit = async e => {
+    e.preventDefault(); const f = $('#jf'), b = $('#jbtn');
+    if ($('#f-password').value !== $('#f-password2').value) { showErrors(f, { field: 'password2', code: 'password_mismatch' }); return; }
+    const body = { token, full_name: $('#f-full_name').value, username: $('#f-username').value, password: $('#f-password').value };
+    b.disabled = true; showErrors(f, null);
+    try {
+      const res = await api('/api/invite/accept', { method: 'POST', body });
+      try {
+        const r = await api('/api/auth/login', { method: 'POST', body: { username: res.username, password: body.password } });
+        CSRF = r.csrf; S.user = r.user; S.license = r.license; applyLang(); applyTheme(); toast(t('inv.joined_toast'));
+        history.replaceState(null, '', '#/dashboard'); render();
+      } catch (le) { toast(t('inv.joined_toast')); history.replaceState(null, '', '#/login'); render(); }
+    } catch (err) { b.disabled = false; if (['invite_invalid', 'invite_used', 'invite_expired'].includes(err.code)) return dead(err); if (!showErrors(f, err)) fail(err); }
+  };
+}
 function renderSetup() {
   $('#root').innerHTML = `<div class="auth">${authTools()}<div class="box wide"><div class="head">${logoHTML()}<h1>${t('setup.title')}</h1><p>${t('setup.sub')}</p></div>
   <form class="card" id="sf" novalidate><div class="fg">
@@ -360,6 +394,7 @@ async function render() {
   const h = location.hash.replace(/^#\//, '').split('?')[0];
   if (S.brand.needs_setup) return renderSetup();
   if (!S.user && h === 'request-access') return renderRequestAccess();
+  if (h === 'invite') { if (S.user) { api('/api/auth/logout', { method: 'POST', body: {} }).catch(() => { }); S.user = null; CSRF = null; } return renderInvite(); }   // someone else's link: never join while signed in as another account
   if (!S.user) { if (h && h !== 'login' && h !== 'setup') S.next = location.hash; return renderLogin(); }   // e.g. a scanned QR label
   if (S.user.must_change_password) return renderForcedPassword();
   if (h === 'login' || h === 'setup' || h === 'request-access' || h === '') { return go('#/dashboard'); }
@@ -413,12 +448,12 @@ const actionLabel = a => (DICT[LANG]['act.' + a] || DICT.en['act.' + a]) || a;
 /* ============ users ============ */
 async function pUsers(el) {
   const manage = has('users.manage');
-  pageHead(t('users.title'), t('users.sub'), manage ? `<button class="btn pri sm" id="addu">${ic('plus', 16)}${t('users.add')}</button>` : '');
+  pageHead(t('users.title'), t('users.sub'), manage ? `<button class="btn sm" id="addu">${ic('plus', 16)}${t('users.add')}</button><button class="btn pri sm" id="invu">${ic('mail', 16)}${t('inv.invite')}</button>` : '');
   const [ur, rr] = await Promise.all([api('/api/users'), api('/api/roles')]);
   const roles = rr.roles;
-  el.innerHTML = `${manage ? '<div id="accq"></div>' : ''}<div class="card"><div class="toolbar"><input class="inp" id="uq" style="max-width:340px" placeholder="${t('common.search')}"><div class="sp"></div><span class="badge mut" id="ucount"></span></div><div id="utbl"></div></div>`;
+  el.innerHTML = `${manage ? '<div id="accq"></div><div id="invq"></div>' : ''}<div class="card"><div class="toolbar"><input class="inp" id="uq" style="max-width:340px" placeholder="${t('common.search')}"><div class="sp"></div><span class="badge mut" id="ucount"></span></div><div id="utbl"></div></div>`;
   let list = ur.users;
-  if (manage) accessQueue($('#accq'), roles, () => reload());
+  if (manage) { accessQueue($('#accq'), roles, () => reload()); inviteQueue($('#invq'), roles); }
   const draw = () => {
     const q = $('#uq').value.trim().toLowerCase();
     const rows = list.filter(u => !q || (u.username + ' ' + u.full_name + ' ' + u.email).toLowerCase().includes(q));
@@ -455,8 +490,72 @@ async function pUsers(el) {
     };
   };
   const add = $('#addu'); if (add) add.onclick = () => userForm(null);
+  const inv = $('#invu'); if (inv) inv.onclick = () => inviteForm(roles, () => inviteQueue($('#invq'), roles));
   $('#uq').addEventListener('input', debounce(draw, 120));
   draw();
+}
+
+/* invitations (Users page, users.manage): the administrator picks the role, the person picks the password */
+const INV_DAYS = [1, 3, 7, 14, 30];
+function inviteForm(roles, done) {
+  const pick = roles.filter(q => S.user.is_super || !q.all_permissions);
+  const def = (pick.find(q => q.key === 'viewer') || pick[pick.length - 1] || {}).id;
+  const m = modal(`<h2>${t('inv.title')}</h2><div class="sub">${t('inv.sub')}</div><form id="ivf" novalidate><div class="fg">
+    ${field('email', t('users.email'), inp('email', '', 'type="email" dir="ltr" autocomplete="off" maxlength="160"'), { req: true })}
+    ${field('full_name', t('users.full_name'), inp('full_name', '', 'maxlength="120" autocomplete="off"'), { req: true })}
+    ${field('role_id', t('users.role'), `<select id="f-role_id">${pick.map(q => `<option value="${q.id}" ${q.id === def ? 'selected' : ''}>${esc(nameOf(q))}</option>`).join('')}</select>`, { req: true, hint: t('acc.role_hint') })}
+    ${field('username', t('login.username'), inp('username', '', 'dir="ltr" autocomplete="off" autocapitalize="off" maxlength="40"'), { hint: t('inv.username_hint') })}
+    ${field('lang', t('inv.lang'), `<select id="f-lang"><option value="en">English</option><option value="ar">العربية</option></select>`)}
+    ${field('days', t('inv.days'), `<select id="f-days">${INV_DAYS.map(n => `<option value="${n}" ${n === 7 ? 'selected' : ''}>${esc(t('inv.days_n', { n }))}</option>`).join('')}</select>`)}</div>
+    <div class="foot"><button type="button" class="btn" id="ivc">${t('common.cancel')}</button><button class="btn pri" type="submit" id="ivs">${ic('mail', 15)}${t('inv.send')}</button></div></form>`);
+  $('#f-lang', m).value = LANG;
+  $('#ivc', m).onclick = () => m.close();
+  $('#f-email', m).focus();
+  $('#ivf', m).onsubmit = async ev => {
+    ev.preventDefault(); const f = $('#ivf', m), b = $('#ivs', m);
+    const body = { email: $('#f-email', m).value, full_name: $('#f-full_name', m).value, role_id: +$('#f-role_id', m).value, username: $('#f-username', m).value,
+      lang: $('#f-lang', m).value, days: +$('#f-days', m).value, origin: location.origin };
+    b.disabled = true; showErrors(f, null);
+    try { const r = await api('/api/invites', { method: 'POST', body }); m.close(); inviteResult(r, body.email.trim()); done && done(); }
+    catch (err) { b.disabled = false; if (!showErrors(f, err)) fail(err); }
+  };
+}
+/* after sending: say whether the e-mail went out, and always offer the link (it is shown only now) */
+function inviteResult(r, email) {
+  const why = r.mail_error ? (r.mail_error === 'email_off' ? t('inv.mail_off') : r.mail_error === 'no_public_url' ? t('inv.mail_no_url') : t('inv.mail_failed', { why: errText({ code: r.mail_error }) })) : '';
+  const m = modal(`<h2>${r.emailed ? t('inv.sent_title') : t('inv.made_title')}</h2>
+    <div class="banner ${r.emailed ? 'good' : 'warn'}" style="margin:6px 0 12px">${ic(r.emailed ? 'check' : 'warn', 18)}<div>${esc(r.emailed ? t('inv.sent_text', { email }) : why + ' ' + t('inv.copy_text'))}</div></div>
+    <div class="pw" style="align-items:flex-start"><span class="mono" style="font-size:12px;letter-spacing:0;word-break:break-all;flex:1" dir="ltr">${esc(r.link)}</span><button class="btn sm" id="cp">${ic('copy', 15)}${t('common.copy')}</button></div>
+    <div class="hint" style="margin-top:8px">${t('inv.link_hint')}</div>
+    <div class="foot"><button class="btn pri" id="ok">${t('common.done')}</button></div>`, 'sm');
+  $('#cp', m).onclick = () => { navigator.clipboard && navigator.clipboard.writeText(r.link).then(() => toast(t('common.copied'))); };
+  $('#ok', m).onclick = () => m.close();
+}
+async function inviteQueue(box, roles, view = 'open') {
+  let r;
+  try { r = await api('/api/invites?view=' + view); } catch (e) { box.innerHTML = ''; return; }
+  if (view === 'open' && !r.invites.length) { box.innerHTML = ''; return; }
+  const st = x => x.status === 'pending' ? `<span class="badge warn">${t('inv.s_pending')}</span>` : x.status === 'expired' ? `<span class="badge bad">${t('inv.s_expired')}</span>` : `<span class="badge good">${t('inv.s_accepted')}</span>`;
+  const when = x => x.status === 'accepted' ? t('inv.joined', { u: x.account || '—', d: fmtDate(x.accepted_at, true) })
+    : t(x.status === 'expired' ? 'inv.expired_on' : 'inv.expires', { d: fmtDate(x.expires_at, true) }) + ' · ' + (x.sent_at ? t('inv.emailed', { d: fmtDate(x.sent_at, true) }) : t('inv.not_emailed'));
+  box.innerHTML = `<div class="card acccard"><div class="cardhead" style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:200px"><h3>${ic('mail', 17)} ${t(view === 'open' ? 'inv.q_title' : 'inv.history')}</h3><div class="sub">${t(view === 'open' ? 'inv.q_sub' : 'inv.history_sub')}</div></div>
+    <button class="btn sm" id="inv-view">${view === 'open' ? t('inv.history') : t('inv.show_open')}</button></div>
+    ${r.invites.length ? `<div class="acclist">${r.invites.map(x => `<div class="accitem">
+      <div class="accmain"><b>${esc(x.full_name)}</b> ${st(x)} <span class="badge info">${esc(nameOf(x, 'role_name'))}</span><div class="mono accsub">${esc(x.email)}${x.username ? ' · ' + esc(x.username) : ''}</div>
+      <div class="accsub">${esc(t('inv.by', { by: x.invited_by || '—', d: fmtDate(x.created_at, true) }))} · ${esc(when(x))}</div></div>
+      ${x.status !== 'accepted' ? `<div class="accbtns"><button class="btn sm" data-rs="${x.id}">${ic('refresh', 15)}${t('inv.resend')}</button><button class="btn sm" data-rv="${x.id}">${ic('x', 15)}${t('inv.cancel')}</button></div>` : ''}</div>`).join('')}</div>` : `<div class="empty">${t('common.none')}</div>`}</div>`;
+  const again = () => inviteQueue(box, roles, view);
+  $('#inv-view', box).onclick = () => inviteQueue(box, roles, view === 'open' ? 'all' : 'open');
+  $$('[data-rs]', box).forEach(b => b.onclick = async () => {
+    const x = r.invites.find(q => q.id == b.dataset.rs);
+    if (!await confirmBox(t('inv.resend_q', { n: x.full_name }), t('inv.resend_text'), t('inv.resend'), false)) return;
+    try { const res = await api(`/api/invites/${x.id}/resend`, { method: 'POST', body: { origin: location.origin, days: 7 } }); inviteResult(res, x.email); again(); } catch (e) { fail(e); }
+  });
+  $$('[data-rv]', box).forEach(b => b.onclick = async () => {
+    const x = r.invites.find(q => q.id == b.dataset.rv);
+    if (!await confirmBox(t('inv.cancel_q', { n: x.full_name }), t('inv.cancel_text'), t('inv.cancel'))) return;
+    try { await api(`/api/invites/${x.id}/revoke`, { method: 'POST', body: {} }); toast(t('inv.cancelled')); again(); } catch (e) { fail(e); }
+  });
 }
 
 /* access requests waiting for a decision (Users page, users.manage) */

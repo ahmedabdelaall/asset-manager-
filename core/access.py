@@ -13,9 +13,10 @@ Security notes
 """
 import re
 import logging
+import threading
 from email.utils import formataddr
 
-from . import audit, notify, company
+from . import audit, notify, company, rbac
 from .errors import ApiError
 from .transfer import _t
 from .util import now_iso, text, username_ok
@@ -104,6 +105,41 @@ def submit(ctx):
                          (row["full_name"], email, row["phone"], row["department"], row["job_title"], username, row["reason"],
                           row["lang"], ctx.ip, now_iso()))
         audit.write(db, None, "access.request", "access_request", cur.lastrowid, {"full_name": full_name, "email": email}, ctx.ip)
+    _alert_admins(ctx, row)
+
+
+def _alert_admins(ctx, row):
+    """E-mail every active administrator who can approve (users.manage) that a request is waiting. Sent in the
+    background so the public form answers at once and its timing reveals nothing."""
+    db, inst = ctx.db, ctx.app.inst
+    s = notify.get_settings(db, inst, reveal=True)
+    if not s["email_enabled"] or not s["smtp_host"]:
+        return
+    admins = [u for u in db.query("SELECT * FROM users WHERE is_active=1 AND email<>''") if rbac.user_has(db, u, "users.manage")]
+    if not admins:
+        return
+    c = company.get(db) or {}
+    link = (s["public_url"] or "") + "/#/users" if s["public_url"] else ""
+    mails = []
+    for u in admins:
+        lang = u["lang"] if u["lang"] in ("en", "ar") else "en"
+        cname = ((c.get("name_ar") or c.get("name_en")) if lang == "ar" else (c.get("name_en") or c.get("name_ar"))) or ""
+        fmt = dict(row, admin=u["full_name"] or u["username"], company=cname,
+                   details="\n".join("%s: %s" % (_t(lang, k), row[f]) for f, k in
+                                     (("email", "users.email"), ("phone", "acc.phone"), ("department", "acc.department"),
+                                      ("job_title", "acc.job_title"), ("reason", "acc.reason")) if row.get(f)))
+        body = _t(lang, "mail.access_new_body").format(**fmt)
+        if link:
+            body += "\n\n" + link
+        mails.append((formataddr((u["full_name"] or u["username"], u["email"])), _t(lang, "mail.access_new_subject").format(**fmt), body))
+
+    def send():
+        for to, subject, body in mails:
+            try:
+                notify._smtp_send(s, to, subject, body, None)
+            except Exception as e:
+                log.error("Access-request alert to %s failed: %s", to, e)
+    threading.Thread(target=send, daemon=True).start()
 
 
 def list_requests(db, status="pending"):
