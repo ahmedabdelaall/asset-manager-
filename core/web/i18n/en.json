@@ -1064,8 +1064,7 @@
  "rcpt.free_hint": "Click any text on the receipt and change it. These changes are only for this print: they are not saved and disappear when you leave the page.",
  "inv.invite": "Invite user",
  "inv.title": "Invite a user",
- "inv.sub": "Choose the role now. The person gets an e-mail with a one-time link, chooses their own password and is signed in.",
- "inv.username_hint": "Optional. Leave empty to let the person choose it.",
+ "inv.sub": "Choose the role now. The person gets an e-mail with a one-time link, chooses their own username and password, and is signed in.",
  "inv.lang": "E-mail language",
  "inv.days": "Link works for",
  "inv.days_n": "{n} days",
@@ -1119,7 +1118,6 @@
  "act.invite.accept": "Invitation accepted",
  "mail.invite_subject": "You are invited to {company}",
  "mail.invite_body": "Hello {name},\n\n{inviter} invited you to the asset management system of {company} as {role}.\n\nOpen this link to choose your password and create your account:\n{link}\n\nThe link works once, until {expires}.",
- "mail.invite_username": "Your username: {username}",
  "mail.invite_footer": "If you did not expect this e-mail, you can ignore it.",
  "mail.access_new_subject": "New access request: {full_name}",
  "mail.access_new_body": "Hello {admin},\n\n{full_name} asked for an account in the asset management system of {company}.\n\n{details}\n\nOpen Users in the system to approve or reject the request. Nobody gets in until an administrator approves."

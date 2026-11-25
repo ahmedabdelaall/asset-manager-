@@ -19,7 +19,7 @@ from email.utils import formataddr
 from . import audit, notify, company, rbac, security
 from .errors import ApiError
 from .transfer import _t
-from .util import now_iso, text, username_ok
+from .util import now_iso, text
 
 log = logging.getLogger("am")
 
@@ -84,9 +84,7 @@ def create(ctx):
     db, d = ctx.db, ctx.json()
     email = _email(d)
     full_name = text(d, "full_name", minlen=2, maxlen=120)
-    username = text(d, "username", maxlen=40, required=False).lower()
-    if username and not username_ok(username):
-        raise ApiError(422, "username_invalid", "Use 3-40 letters, digits, dot, dash or underscore", field="username")
+    username = ""                                     # the invited person always chooses their own username
     role = _role(db, d.get("role_id"))
     if not rbac.can_assign_role(db, ctx.user, role["id"]):
         raise ApiError(403, "role_not_allowed", "You cannot assign a role more powerful than your own", field="role_id")
@@ -98,8 +96,6 @@ def create(ctx):
     with db.tx():
         if db.one("SELECT 1 FROM users WHERE lower(email)=?", (email,)):
             raise ApiError(409, "invite_email_has_account", "Someone already has an account with this email", field="email")
-        if username and db.one("SELECT 1 FROM users WHERE username=?", (username,)):
-            raise ApiError(409, "username_taken", "That username is already used", field="username")
         if db.one("SELECT COUNT(*) c FROM invitations WHERE status='pending'")["c"] >= MAX_PENDING:
             raise ApiError(429, "invites_full", "Too many invitations are waiting")
         db.execute("UPDATE invitations SET status='revoked' WHERE status='pending' AND email=?", (email,))   # one live link per person
@@ -164,13 +160,10 @@ def _deliver(ctx, iid, token, base):
     cname = ((c.get("name_ar") or c.get("name_en")) if lang == "ar" else (c.get("name_en") or c.get("name_ar"))) or ""
     role = (r["role_name_ar"] or r["role_name_en"]) if lang == "ar" else (r["role_name_en"] or r["role_name_ar"])
     fmt = {"name": r["full_name"], "company": cname, "role": role, "inviter": ctx.user["full_name"] or ctx.user["username"],
-           "link": link, "expires": time.strftime("%Y-%m-%d", time.localtime(r["expires_at"])),
-           "username": r["username"] or "-"}
+           "link": link, "expires": time.strftime("%Y-%m-%d", time.localtime(r["expires_at"]))}
     subject = _t(lang, "mail.invite_subject").format(**fmt)
     body = _t(lang, "mail.invite_body").format(**fmt)
-    if r["username"]:
-        body += "\n" + _t(lang, "mail.invite_username").format(**fmt)
-    body += "\n\n" + _t(lang, "mail.invite_footer").format(**fmt)
+    body +="\n\n" + _t(lang, "mail.invite_footer").format(**fmt)
     try:
         notify._smtp_send(s, formataddr((r["full_name"], r["email"])), subject, body, None)
     except Exception as e:

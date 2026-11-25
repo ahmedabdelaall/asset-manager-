@@ -504,7 +504,6 @@ function inviteForm(roles, done) {
     ${field('email', t('users.email'), inp('email', '', 'type="email" dir="ltr" autocomplete="off" maxlength="160"'), { req: true })}
     ${field('full_name', t('users.full_name'), inp('full_name', '', 'maxlength="120" autocomplete="off"'), { req: true })}
     ${field('role_id', t('users.role'), `<select id="f-role_id">${pick.map(q => `<option value="${q.id}" ${q.id === def ? 'selected' : ''}>${esc(nameOf(q))}</option>`).join('')}</select>`, { req: true, hint: t('acc.role_hint') })}
-    ${field('username', t('login.username'), inp('username', '', 'dir="ltr" autocomplete="off" autocapitalize="off" maxlength="40"'), { hint: t('inv.username_hint') })}
     ${field('lang', t('inv.lang'), `<select id="f-lang"><option value="en">English</option><option value="ar">العربية</option></select>`)}
     ${field('days', t('inv.days'), `<select id="f-days">${INV_DAYS.map(n => `<option value="${n}" ${n === 7 ? 'selected' : ''}>${esc(t('inv.days_n', { n }))}</option>`).join('')}</select>`)}</div>
     <div class="foot"><button type="button" class="btn" id="ivc">${t('common.cancel')}</button><button class="btn pri" type="submit" id="ivs">${ic('mail', 15)}${t('inv.send')}</button></div></form>`);
@@ -513,7 +512,7 @@ function inviteForm(roles, done) {
   $('#f-email', m).focus();
   $('#ivf', m).onsubmit = async ev => {
     ev.preventDefault(); const f = $('#ivf', m), b = $('#ivs', m);
-    const body = { email: $('#f-email', m).value, full_name: $('#f-full_name', m).value, role_id: +$('#f-role_id', m).value, username: $('#f-username', m).value,
+    const body = { email: $('#f-email', m).value, full_name: $('#f-full_name', m).value, role_id: +$('#f-role_id', m).value,
       lang: $('#f-lang', m).value, days: +$('#f-days', m).value, origin: location.origin };
     b.disabled = true; showErrors(f, null);
     try { const r = await api('/api/invites', { method: 'POST', body }); m.close(); inviteResult(r, body.email.trim()); done && done(); }

@@ -60,7 +60,7 @@ class TestInvites(Base):
         # the same e-mail cannot be invited again
         self.assertEqual(self.invite(c)[1]["code"], "invite_email_has_account")
 
-    def test_email_sent_with_fixed_username(self):
+    def test_email_sent_and_person_chooses_username(self):
         c = self.admin()
         c.put("/api/settings", MAIL)
         sent = []
@@ -71,13 +71,14 @@ class TestInvites(Base):
         to, subj, txt = sent[0]
         self.assertIn("mona@acme.test", to)
         self.assertIn(js["link"], txt)
-        self.assertIn("m.samir", txt)
         self.assertIn("Acme Corp", subj)
         tok = token_of(js["link"])
-        # the username chosen by the administrator cannot be changed by the person
-        s, res, _ = self.anon().post("/api/invite/accept", {"token": tok, "username": "hacker", "password": "Mona-Strong-Pass-1"})
-        self.assertEqual(res["username"], "m.samir", res)
-        u = [x for x in c.get("/api/users")[1]["users"] if x["username"] == "m.samir"][0]
+        # a username sent by the administrator is ignored: the person chooses it
+        self.assertEqual(self.anon().post("/api/invite/check", {"token": tok})[1]["username"], "")
+        self.assertEqual(self.anon().post("/api/invite/accept", {"token": tok, "username": "root", "password": "Mona-Strong-Pass-1"})[1]["code"], "username_taken")
+        s, res, _ = self.anon().post("/api/invite/accept", {"token": tok, "username": "MonaS", "password": "Mona-Strong-Pass-1"})
+        self.assertEqual(res["username"], "monas", res)
+        u = [x for x in c.get("/api/users")[1]["users"] if x["username"] == "monas"][0]
         self.assertEqual(u["role_key"], "company_admin")
 
     def test_mail_failure_keeps_invitation(self):
@@ -132,7 +133,6 @@ class TestInvites(Base):
         self.assertEqual(self.anon().post("/api/invite/check", {"token": token_of(js["link"])})[1]["code"], "invite_invalid")
         self.assertEqual(self.invite(c, email="bad")[1]["field"], "email")
         self.assertEqual(self.invite(c, email="a@acme.test", days=99)[1]["field"], "days")
-        self.assertEqual(self.invite(c, email="a@acme.test", username="root")[1]["code"], "username_taken")
 
 
 class TestAccessAlert(Base):
