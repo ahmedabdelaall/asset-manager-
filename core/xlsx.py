@@ -157,17 +157,35 @@ def _serial_to_date(v):
     return (datetime.date(1899, 12, 30) + datetime.timedelta(days=int(float(v)))).isoformat()
 
 
-def read(data):
-    """Rows of the first worksheet. Values: str, float, bool, or 'YYYY-MM-DD' for date-formatted cells."""
+def _open(data):
     try:
         z = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile:
         raise ApiError(400, "file_unreadable", "The file could not be read")
     if sum(i.file_size for i in z.infolist()) > MAX_UNCOMPRESSED:
         raise ApiError(413, "too_large", "The file is too large")
+    return z
+
+
+def sheet_names(data):
+    """Names of the worksheets (tabs), in workbook order."""
+    z = _open(data)
+    try:
+        return [s.get("name") or "" for s in _xml(z, "xl/workbook.xml").findall("m:sheets/m:sheet", NS)]
+    except Exception:
+        raise ApiError(400, "file_unreadable", "The file could not be read")
+
+
+def read(data, sheet=0):
+    """Rows of one worksheet (the first by default). Values: str, float, bool, or 'YYYY-MM-DD' for date-formatted cells.
+    Row i of the result is row i+1 of the sheet (empty rows are kept), so row numbers in messages match Excel."""
+    z = _open(data)
     try:
         wb = _xml(z, "xl/workbook.xml")
-        first = wb.find("m:sheets/m:sheet", NS)
+        sheets = wb.findall("m:sheets/m:sheet", NS)
+        if not isinstance(sheet, int) or not 0 <= sheet < len(sheets):
+            raise ApiError(400, "sheet_not_found", "That sheet is not in the file")
+        first = sheets[sheet]
         rid = first.get("{%s}id" % NS["r"])
         rels = _xml(z, "xl/_rels/workbook.xml.rels")
         target = next(r.get("Target") for r in rels.findall("pr:Relationship", NS) if r.get("Id") == rid)

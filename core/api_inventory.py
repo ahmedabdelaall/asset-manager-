@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """JSON API for assets, categories, departments, employees and assignments (Phase 2),
 documents, receipts, Excel import/export (Phase 3)."""
+import json
 import time
 import urllib.parse
 
@@ -247,16 +248,46 @@ def import_template(ctx):
     return _xlsx(transfer.template(ctx.db, kind, _lang(ctx)), kind + "_template")
 
 
+def _mapping(ctx):
+    """The Match columns choice, sent as JSON in the X-Mapping header ({column index: field}); absent = template names."""
+    raw = ctx.h.headers.get("X-Mapping")
+    if not raw:
+        return None
+    try:
+        m = json.loads(urllib.parse.unquote(raw))
+    except ValueError:
+        raise ApiError(400, "bad_request", "Bad request")
+    if not isinstance(m, dict):
+        raise ApiError(400, "bad_request", "Bad request")
+    return m
+
+
+def _fname(ctx):
+    return urllib.parse.unquote(ctx.h.headers.get("X-Filename", ""))
+
+
+@route("POST", "/api/import/employees/columns", perm="employees.manage")
+def import_employee_columns(ctx):
+    return transfer.columns(ctx, "employees", ctx.body, _fname(ctx), _int(ctx.query, "sheet", 0))
+
+
+@route("POST", "/api/import/assets/columns", perm="assets.manage")
+def import_asset_columns(ctx):
+    return transfer.columns(ctx, "assets", ctx.body, _fname(ctx), _int(ctx.query, "sheet", 0))
+
+
 @route("POST", "/api/import/employees", perm="employees.manage")
 def import_employees(ctx):
     q = ctx.query
-    return transfer.import_employees(ctx, ctx.body, ctx.h.headers.get("X-Filename", ""), q.get("dry_run", "1") == "1", q.get("update") == "1")
+    return transfer.import_employees(ctx, ctx.body, _fname(ctx), q.get("dry_run", "1") == "1", q.get("update") == "1",
+                                     _mapping(ctx), _int(q, "sheet", 0))
 
 
 @route("POST", "/api/import/assets", perm="assets.manage")
 def import_assets(ctx):
     q = ctx.query
-    return transfer.import_assets(ctx, ctx.body, ctx.h.headers.get("X-Filename", ""), q.get("dry_run", "1") == "1", q.get("update") == "1")
+    return transfer.import_assets(ctx, ctx.body, _fname(ctx), q.get("dry_run", "1") == "1", q.get("update") == "1",
+                                  _mapping(ctx), _int(q, "sheet", 0), q.get("category", ""))
 
 
 @route("GET", "/api/export/assets", perm="assets.view")

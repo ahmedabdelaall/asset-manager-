@@ -369,3 +369,9 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
 .menu .pop .alrow .alx:hover{color:var(--bad);background:none}
 .menu .pop .alfoot{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 12px 4px;border-top:1px solid var(--line);margin-top:6px;font-size:12.5px}
 .menu .pop .alfoot .lnk{width:auto;padding:4px 6px;color:var(--brand);font-weight:700}
+/* import: Match columns table */
+.mapstep{align-items:flex-start}
+.maptbl td{vertical-align:middle}
+.maptbl .ex{font-size:12.5px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.maptbl .sel{max-width:none;width:100%;min-width:180px}
+.maptbl tr.skipped td:not(:last-child){opacity:.55}
