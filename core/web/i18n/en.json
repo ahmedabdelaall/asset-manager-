@@ -1087,11 +1087,5 @@
  "rcpt.free": "Edit before printing",
  "rcpt.free_done": "Done editing",
  "rcpt.free_hint": "Click any text on the receipt and change it. These changes are only for this print: they are not saved and disappear when you leave the page.",
- "rcpt.edit_handover": "Edit handover",
- "rcpt.edit_sub": "Correct the saved details of {n}. The receipt number stays the same and the change is recorded in the audit log.",
- "rcpt.notes_return": "Return notes",
- "err.date_after_next": "The return date is after the next handover of this asset.",
- "err.asset_not_returned": "This asset has not been returned yet.",
- "act.assignment.update": "Handover corrected",
  "act.settings.receipt": "Receipt layout changed"
 }

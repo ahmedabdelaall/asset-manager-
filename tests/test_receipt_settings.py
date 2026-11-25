@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Receipt layout, correcting a saved handover, and switching asset requests off (0.9.0)."""
+"""Receipt layout and switching asset requests off (0.9.0)."""
 import unittest
 
 from test_assets import InvBase
-from core import inventory as inv
 
 
 class TestReceiptLayout(InvBase):
@@ -25,39 +24,6 @@ class TestReceiptLayout(InvBase):
         self.assertEqual(c.get("/api/settings")[1]["alert_warranty_days"], 45)
         self.make_user(c, "view1", "viewer")
         self.assertEqual(self.login_as("view1").put("/api/settings/receipt", {"hide": []})[0], 403)
-
-
-class TestEditHandover(InvBase):
-    def test_correct_dates_condition_and_notes(self):
-        c = self.setup_inventory()
-        app = self.env.app
-        ctx = type("Ctx", (), {"db": app.db, "user": {"id": 1, "username": "root"}, "audit": lambda self, *a, **k: None})()
-        aid, _ = self.new_asset(c)
-        g1 = inv.assign(ctx, aid, {"employee_id": self.emp}, at="2025-01-10")
-        inv.return_asset(ctx, aid, {}, at="2025-06-01")
-        g2 = inv.assign(ctx, aid, {"employee_id": self.emp}, at="2025-06-05")
-        # fix the first handover: date, condition and notes; the receipt number is unchanged
-        s, js, _ = c.put("/api/assignments/%d" % g1, {"assigned_on": "2025-01-08", "condition_out": "fair", "notes_out": "Charger missing",
-                                                     "returned_on": "2025-06-02", "condition_in": "poor", "notes_in": "Scratched"})
-        self.assertEqual(s, 200, js)
-        r = c.get("/api/assignments/%d/receipt" % g1)[1]["assignment"]
-        self.assertEqual((r["assigned_at"][:10], r["condition_out"], r["notes_out"], r["returned_at"][:10], r["condition_in"], r["receipt_out_no"]),
-                         ("2025-01-08", "fair", "Charger missing", "2025-06-02", "poor", "HO-2025-0001"))
-        # dates must stay in order
-        self.assertEqual(c.put("/api/assignments/%d" % g1, {"returned_on": "2025-01-01"})[1]["code"], "date_before_handover")
-        self.assertEqual(c.put("/api/assignments/%d" % g1, {"returned_on": "2025-07-01"})[1]["code"], "date_after_next")
-        self.assertEqual(c.put("/api/assignments/%d" % g2, {"assigned_on": "2025-05-01"})[1]["code"], "date_before_return")
-        self.assertEqual(c.put("/api/assignments/%d" % g2, {"assigned_on": "2999-01-01"})[1]["code"], "date_in_future")
-        self.assertEqual(c.put("/api/assignments/%d" % g2, {"returned_on": "2025-07-01"})[1]["code"], "asset_not_returned")
-        self.assertEqual(c.put("/api/assignments/%d" % g2, {"expected_return": "2025-12-31"})[0], 200)   # past dates allowed when correcting
-        # audited, with the notes text kept out of the permanent log
-        e = [x for x in c.get("/api/audit?action=assignment")[1]["entries"] if x["action"] == "assignment.update"]
-        self.assertEqual(len(e), 2)
-        self.assertNotIn("Charger missing", str(e))
-        self.assertIn("notes_out", str(e))
-        # only people who manage assignments
-        self.make_user(c, "view1", "viewer")
-        self.assertEqual(self.login_as("view1").put("/api/assignments/%d" % g1, {"notes_out": "x"})[0], 403)
 
 
 class TestAssetRequestsSwitch(InvBase):

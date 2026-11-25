@@ -174,12 +174,6 @@ def assignments_receipt(ctx):
     return r
 
 
-@route("PUT", "/api/assignments/<int:id>", perm="assignments.manage")
-def assignments_update(ctx):
-    inv.update_assignment(ctx, _id(ctx), ctx.json())
-    return {}
-
-
 # ---------------------------------------------------------------- documents (permission depends on what they are attached to)
 def _entity(ctx):
     return ctx.query.get("entity", ""), _int(ctx.query, "id", 0)

@@ -1171,7 +1171,7 @@ async function renderReceipt(seq) {
     $('#root').innerHTML = `<div class="rbar noprint"><button class="btn pri sm" id="r-print">${ic('printer', 15)}${t('rcpt.print')}</button>
       <div class="seg" id="r-lang"><button data-l="ar" class="${RL === 'ar' ? 'on' : ''}">العربية</button><button data-l="en" class="${RL === 'en' ? 'on' : ''}">English</button></div>
       <button class="btn sm ${FREE ? 'pri' : ''}" id="r-free" aria-pressed="${FREE}">${ic('edit', 15)}${t(FREE ? 'rcpt.free_done' : 'rcpt.free')}</button>
-      ${has('assignments.manage') ? `<button class="btn sm" id="r-edit">${ic('edit', 15)}${t('rcpt.edit_handover')}</button><label class="btn sm">${ic('upload', 15)}${t('rcpt.attach')}<input type="file" id="r-file" hidden accept=".pdf,.png,.jpg,.jpeg,.webp"></label>` : ''}
+      ${has('assignments.manage') ? `<label class="btn sm">${ic('upload', 15)}${t('rcpt.attach')}<input type="file" id="r-file" hidden accept=".pdf,.png,.jpg,.jpeg,.webp"></label>` : ''}
       <div class="sp"></div><span class="mut" style="font-size:12.5px">${t('rcpt.print_hint')}</span></div>
       ${FREE ? `<div class="rbar noprint" style="padding-top:0"><div class="banner info" style="margin:0;flex:1">${ic('edit', 18)}<div class="grow">${esc(t('rcpt.free_hint'))}</div></div></div>` : ''}
       ${r.signed_copies.length ? `<div class="rbar noprint" style="padding-top:0">${ic('check', 16)} ${t('rcpt.signed')}: ${r.signed_copies.map(d => `<a href="/api/documents/${d.id}/file?inline=1" target="_blank" rel="noopener">${esc(d.filename)}</a>`).join(' · ')}</div>` : ''}
@@ -1191,29 +1191,9 @@ async function renderReceipt(seq) {
     $$('#r-lang button').forEach(b => b.onclick = () => { RL = renderReceipt.lang = b.dataset.l; draw(); });
     // "Edit before printing": any text can be changed for this one print; nothing is saved
     $('#r-free').onclick = () => { FREE = !FREE; draw(); if (FREE) { const h = $('.rcpt h1'); if (h) h.focus(); } };
-    const ed = $('#r-edit'); if (ed) ed.onclick = () => handoverForm(g, async () => { r = await api(`/api/assignments/${g.id}/receipt?kind=${kind}`); draw(); });
     const fi = $('#r-file'); if (fi) fi.onchange = async () => { if (await uploadFiles('assignment', g.id, [...fi.files])) { r = await api(`/api/assignments/${g.id}/receipt?kind=${kind}`); draw(); } };
   };
   draw();
-}
-
-/* correct a saved handover (wrong date, condition, notes); receipt numbers stay the same, every change is audited */
-function handoverForm(g, done) {
-  const back = !!g.returned_at;
-  const m = modal(`<h2>${t('rcpt.edit_handover')}</h2><div class="sub">${esc(t('rcpt.edit_sub', { n: g.receipt_out_no || '' }))}</div><form id="hof" novalidate><div class="fg">
-    ${field('assigned_on', t('asg.assigned_on'), inp('assigned_on', (g.assigned_at || '').slice(0, 10), `type="date" max="${today()}"`), { req: true })}
-    ${field('expected_return', t('asg.expected_return'), inp('expected_return', g.expected_return || '', 'type="date"'))}
-    ${field('condition_out', t('asg.condition_out'), dd('condition_out', condOpts(g.condition_out)))}<div></div>
-    ${field('notes_out', t('asg.notes'), txa('notes_out', g.notes_out || ''), { full: true })}
-    ${back ? `${field('returned_on', t('asg.returned_on'), inp('returned_on', (g.returned_at || '').slice(0, 10), `type="date" max="${today()}"`), { req: true })}
-    ${field('condition_in', t('asg.condition_in'), dd('condition_in', condOpts(g.condition_in || 'good')))}
-    ${field('notes_in', t('rcpt.notes_return'), txa('notes_in', g.notes_in || ''), { full: true })}` : ''}
-    </div>${footBtns()}</form>`);
-  bindCancel(m);
-  bindSubmit(m, $('#hof', m), async () => {
-    const body = {}; ['assigned_on', 'expected_return', 'condition_out', 'notes_out'].concat(back ? ['returned_on', 'condition_in', 'notes_in'] : []).forEach(k => body[k] = fv(m, k));
-    await api('/api/assignments/' + g.id, { method: 'PUT', body }); toast(t('toast.saved')); m.close(); done && done();
-  });
 }
 
 /* ============ phase 4: charts ============ */
