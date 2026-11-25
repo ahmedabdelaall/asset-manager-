@@ -169,9 +169,7 @@ def assignments_receipt(ctx):
     kind = ctx.query.get("kind", "handover")
     if kind not in ("handover", "return"):
         raise ApiError(400, "bad_request", "Bad request")
-    r = inv.receipt(ctx.db, _id(ctx), kind, inv.can_see_national_id(ctx.db, ctx.user))
-    r["layout"] = notify.get_settings(ctx.db, ctx.app.inst).get("receipt") or {}
-    return r
+    return inv.receipt(ctx.db, _id(ctx), kind, inv.can_see_national_id(ctx.db, ctx.user))
 
 
 # ---------------------------------------------------------------- documents (permission depends on what they are attached to)
@@ -395,11 +393,6 @@ def requests_cancel(ctx):
 @route("GET", "/api/alerts")
 def alerts_get(ctx):
     return notify.alerts(ctx.db, ctx.app.inst, ctx.user)
-
-
-@route("PUT", "/api/settings/receipt", perm="company.manage")
-def settings_receipt(ctx):
-    return notify.save_receipt(ctx, ctx.json())
 
 
 @route("GET", "/api/settings", perm="company.view")

@@ -31,7 +31,7 @@ log = logging.getLogger("am")
 DEFAULTS = {"alert_warranty_days": 30, "alert_maintenance_days": 7, "public_url": "",
             "email_enabled": False, "smtp_host": "", "smtp_port": 587, "smtp_security": "starttls",
             "smtp_user": "", "smtp_password": "", "smtp_from": "", "digest_hour": 7,
-            "access_requests_enabled": True, "access_allowed_domains": [], "asset_requests_enabled": True, "receipt": {}}
+            "access_requests_enabled": True, "access_allowed_domains": [], "asset_requests_enabled": True}
 SECRET_KEYS = {"smtp_password"}
 
 
@@ -72,38 +72,6 @@ def set_value(db, key, val):
     if key not in DEFAULTS or key in SECRET_KEYS:
         raise ValueError(key)
     db.execute("INSERT INTO settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, json.dumps(val)))
-
-
-# ------------------------------------------------------------------ receipt layout (Company page -> "Receipts")
-RECEIPT_TEXTS = {"title_handover": 120, "title_return": 120, "sig_emp_handover": 80, "sig_emp_return": 80,
-                 "sig_staff_handover": 80, "sig_staff_return": 80, "footer": 1000}
-RECEIPT_ROWS = ("emp_no", "national_id", "department", "job", "category", "brand_model", "serial", "custom",
-                "condition", "expected_return", "notes", "sig_national_id")
-
-
-def receipt_layout(d):
-    """Validated receipt layout: own titles/labels/footer per language (empty = built-in text) and rows to hide."""
-    if not isinstance(d, dict):
-        raise ApiError(400, "invalid_field", "Invalid receipt settings", field="receipt")
-    out = {}
-    for k, n in RECEIPT_TEXTS.items():
-        for lang in ("en", "ar"):
-            key = "%s_%s" % (k, lang)
-            out[key] = text(d, key, maxlen=n, required=False, multiline=(k == "footer"))
-    hide = d.get("hide") or []
-    if not isinstance(hide, list) or any(h not in RECEIPT_ROWS for h in hide):
-        raise ApiError(422, "invalid_field", "Unknown receipt row", field="hide")
-    out["hide"] = [r for r in RECEIPT_ROWS if r in hide]
-    return out
-
-
-def save_receipt(ctx, d):
-    v = receipt_layout(d)
-    with ctx.db.tx():
-        ctx.db.execute("INSERT INTO settings(key,value) VALUES ('receipt',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                       (json.dumps(v, ensure_ascii=False),))
-        ctx.audit("settings.receipt", "settings", "", {"hide": v["hide"], "custom_texts": sorted(k for k, x in v.items() if k != "hide" and x)})
-    return v
 
 
 def save_settings(ctx, d):
