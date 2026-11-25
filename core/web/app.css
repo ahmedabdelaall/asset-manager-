@@ -358,3 +358,14 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
 .sortsel .sel{min-width:0;color:var(--ink);flex:1 1 auto}
 @media (max-width:720px){.toolbar .sortsel{flex:1 1 160px}}
 .pubasset .holder small{display:block}
+/* alerts: open an alert, dismiss it (x), clear all, show hidden */
+.menu .pop .alhead{display:flex;gap:10px;align-items:center}
+.menu .pop .alhead .btn{width:auto;flex:none;padding:6px 10px;font-weight:600}
+.menu .pop .alrow{display:flex;align-items:flex-start;gap:2px;border-radius:10px}
+.menu .pop .alrow:hover{background:var(--tint)}
+.menu .pop .alrow .algo{flex:1;min-width:0}
+.menu .pop .alrow .algo:hover{background:none}
+.menu .pop .alrow .alx{width:auto;flex:none;padding:10px;color:var(--mut)}
+.menu .pop .alrow .alx:hover{color:var(--bad);background:none}
+.menu .pop .alfoot{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 12px 4px;border-top:1px solid var(--line);margin-top:6px;font-size:12.5px}
+.menu .pop .alfoot .lnk{width:auto;padding:4px 6px;color:var(--brand);font-weight:700}

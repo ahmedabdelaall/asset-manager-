@@ -1154,5 +1154,9 @@
  "pub.under_warranty": "Under warranty",
  "set.public_scan": "Show asset details when a QR label is scanned without signing in",
  "set.public_scan_hint": "Shows the tag, name, category, brand, serial, status, condition, location, purchase and warranty dates and the holder's name and department. Never prices, notes, documents or personal data. Turn off to require sign-in.",
- "err.public_scan_off": "Sign in to see this asset."
+ "err.public_scan_off": "Sign in to see this asset.",
+ "alert.dismiss": "Dismiss",
+ "alert.clear_all": "Clear all",
+ "alert.hidden": "{n} dismissed",
+ "alert.restore": "Show again"
 }

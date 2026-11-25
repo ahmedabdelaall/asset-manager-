@@ -1566,17 +1566,24 @@ function openBell(ev) {
   ev.stopPropagation();
   const wrap = $('#bellwrap'), ex = $('.pop', wrap); if (ex) { ex.remove(); return; }
   const a = S.alerts || { items: [], total: 0 };
-  wrap.insertAdjacentHTML('beforeend', `<div class="pop alerts"><div class="who"><b>${t('alert.title')}</b><small>${a.total ? t('alert.count', { n: a.total }) : t('alert.none')}</small></div>
-    ${a.items.map((it, i) => `<button data-i="${i}"><span class="badge ${ALERT_SEV[it.severity]}" style="padding:2px 8px">${esc(t('alert.k_' + it.kind))}</span><span class="al">${esc(alertLine(it))}</span></button>`).join('')}
-    ${a.total > a.items.length ? `<div class="mut" style="padding:8px 12px;font-size:12px">${t('alert.more', { n: a.total - a.items.length })}</div>` : ''}</div>`);
-  $$('.pop.alerts button', wrap).forEach(b => b.onclick = () => {
+  wrap.insertAdjacentHTML('beforeend', `<div class="pop alerts"><div class="who alhead"><div style="flex:1"><b>${t('alert.title')}</b><small>${a.total ? t('alert.count', { n: a.total }) : t('alert.none')}</small></div>${a.items.length ? `<button class="btn sm" id="al-clear">${ic('check', 14)}${t('alert.clear_all')}</button>` : ''}</div>
+    ${a.items.map((it, i) => `<div class="alrow"><button class="algo" data-i="${i}"><span class="badge ${ALERT_SEV[it.severity]}" style="padding:2px 8px">${esc(t('alert.k_' + it.kind))}</span><span class="al">${esc(alertLine(it))}</span></button><button class="alx" data-x="${i}" title="${esc(t('alert.dismiss'))}" aria-label="${esc(t('alert.dismiss'))}">${ic('x', 15)}</button></div>`).join('')}
+    ${a.total > a.items.length ? `<div class="mut" style="padding:8px 12px;font-size:12px">${t('alert.more', { n: a.total - a.items.length })}</div>` : ''}
+    ${a.hidden ? `<div class="alfoot"><span class="mut">${esc(t('alert.hidden', { n: a.hidden }))}</span><button class="lnk" id="al-restore">${t('alert.restore')}</button></div>` : ''}</div>`);
+  const pop = $('.pop.alerts', wrap);
+  const apply = r => { S.alerts = r; const c = $('#bellc'); if (c) { c.textContent = r.total > 99 ? '99+' : r.total; c.hidden = !r.total; c.className = 'bdg ' + (r.items.some(i => i.severity === 'critical') ? 'crit' : ''); } pop.remove(); openBell({ stopPropagation() { } }); };
+  const send = async (url, body) => { try { apply(await api(url, { method: 'POST', body })); } catch (e) { fail(e); } };
+  $$('.alx', pop).forEach(b => b.onclick = ev => { ev.stopPropagation(); send('/api/alerts/dismiss', { keys: [a.items[+b.dataset.x].key] }); });
+  const clr = $('#al-clear', pop); if (clr) clr.onclick = ev => { ev.stopPropagation(); send('/api/alerts/dismiss', { keys: a.items.map(i => i.key) }); };
+  const rst = $('#al-restore', pop); if (rst) rst.onclick = ev => { ev.stopPropagation(); send('/api/alerts/restore', {}); };
+  $$('.pop.alerts .algo', wrap).forEach(b => b.onclick = () => {
     const it = a.items[+b.dataset.i]; $('.pop', wrap).remove();
     if (it.kind === 'request' || it.kind === 'decided') go('#/requests');
     else if (it.kind === 'access') go('#/users');
     else if (it.kind === 'maintenance') go('#/maintenance');
     else assetDetail(it.asset_id, () => { refreshBell(); if (curPage() === 'assets' || curPage() === 'assignments') render(); });
   });
-  setTimeout(() => document.addEventListener('click', e => { const p = $('.pop.alerts'); if (p && !p.contains(e.target)) p.remove(); }, { once: true }), 0);
+  if (!openBell.outside) { openBell.outside = true; document.addEventListener('click', e => { const p = $('.pop.alerts'); if (p && !p.contains(e.target) && !e.target.closest('#t-bell')) p.remove(); }); }
 }
 
 /* ============ phase 6: QR labels & scanning ============ */

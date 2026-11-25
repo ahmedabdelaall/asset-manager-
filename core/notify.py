@@ -24,7 +24,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from . import rbac
 from .errors import ApiError
 from .transfer import _t
-from .util import today_iso, text, choice, number
+from .util import today_iso, text, choice, number, now_iso
 
 log = logging.getLogger("am")
 
@@ -124,52 +124,85 @@ def alerts(db, inst, user, limit=60):
     perms = rbac.role_permissions(db, user["role_id"])
     s = get_settings(db, inst)
     t = today_iso()
-    items, counts = [], {}
+    items, counts, hidden = [], {}, [0]
 
-    def kind(name, where, params, select, make):
+    def kind(name, where, params, select, make, key):
+        """`key` is an SQL expression naming one alert (kind, id and the date it is about); alerts this user
+        dismissed are left out, and come back on their own when that date changes."""
+        everything = db.one("SELECT COUNT(*) c " + where, params)["c"]
+        if not everything:
+            return
+        where = where.replace(" ORDER BY", " AND (%s) NOT IN (SELECT alert_key FROM alert_dismissals WHERE user_id=?) ORDER BY" % key, 1)
+        params = list(params) + [user["id"]]
         n = db.one("SELECT COUNT(*) c " + where, params)["c"]
+        hidden[0] += everything - n
         if n:
             counts[name] = n
-            items.extend(make(r) for r in db.query(select + " " + where + " LIMIT ?", list(params) + [limit]))
+            for r in db.query(select + ", (%s) AS akey " % key + where + " LIMIT ?", params + [limit]):
+                items.append(dict(make(r), key=r["akey"]))
 
     if "assets.view" in perms:
         kind("overdue", "FROM assignments g JOIN assets a ON a.id=g.asset_id JOIN employees e ON e.id=g.employee_id WHERE g.returned_at IS NULL "
              "AND g.expected_return <> '' AND g.expected_return < ? ORDER BY g.expected_return", (t,),
              "SELECT g.asset_id, a.tag, a.name, e.full_name_en, e.full_name_ar, g.expected_return",
              lambda r: {"kind": "overdue", "severity": "critical", "asset_id": r["asset_id"], "tag": r["tag"], "name": r["name"],
-                        "who_en": r["full_name_en"], "who_ar": r["full_name_ar"], "date": r["expected_return"], "days": _days(r["expected_return"], t)})
+                        "who_en": r["full_name_en"], "who_ar": r["full_name_ar"], "date": r["expected_return"], "days": _days(r["expected_return"], t)},
+             "'overdue:' || g.asset_id || ':' || g.expected_return")
         until = (datetime.date.fromisoformat(t) + datetime.timedelta(days=s["alert_warranty_days"])).isoformat()
         kind("warranty", "FROM assets WHERE warranty_until <> '' AND warranty_until >= ? AND warranty_until <= ? "
              "AND status NOT IN ('retired','lost') ORDER BY warranty_until", (t, until), "SELECT id, tag, name, warranty_until",
              lambda r: {"kind": "warranty", "severity": "warning", "asset_id": r["id"], "tag": r["tag"], "name": r["name"],
-                        "date": r["warranty_until"], "days": _days(t, r["warranty_until"])})
+                        "date": r["warranty_until"], "days": _days(t, r["warranty_until"])},
+             "'warranty:' || id || ':' || warranty_until")
     if "maintenance.view" in perms:
         until = (datetime.date.fromisoformat(t) + datetime.timedelta(days=s["alert_maintenance_days"])).isoformat()
         kind("maintenance", "FROM maintenance m JOIN assets a ON a.id=m.asset_id WHERE m.status='scheduled' AND m.scheduled_for <> '' "
              "AND m.scheduled_for <= ? ORDER BY m.scheduled_for", (until,), "SELECT m.id, m.asset_id, m.title, m.scheduled_for, a.tag, a.name",
              lambda r: {"kind": "maintenance", "severity": "critical" if r["scheduled_for"] < t else "warning", "maintenance_id": r["id"],
                         "asset_id": r["asset_id"], "tag": r["tag"], "name": r["name"], "title": r["title"], "date": r["scheduled_for"],
-                        "days": _days(t, r["scheduled_for"])})
+                        "days": _days(t, r["scheduled_for"])},
+             "'maintenance:' || m.id || ':' || m.scheduled_for")
     if "requests.approve" in perms and s.get("asset_requests_enabled", True):
         kind("request", "FROM asset_requests r JOIN employees e ON e.id=r.employee_id LEFT JOIN categories c ON c.id=r.category_id "
              "WHERE r.status='pending' ORDER BY r.id", (),
              "SELECT r.id, r.requested_at, r.needed_by, e.full_name_en, e.full_name_ar, c.name_en AS cat_en, c.name_ar AS cat_ar",
              lambda r: {"kind": "request", "severity": "info", "request_id": r["id"], "who_en": r["full_name_en"], "who_ar": r["full_name_ar"],
-                        "cat_en": r["cat_en"], "cat_ar": r["cat_ar"], "date": r["needed_by"] or r["requested_at"][:10]})
+                        "cat_en": r["cat_en"], "cat_ar": r["cat_ar"], "date": r["needed_by"] or r["requested_at"][:10]},
+             "'request:' || r.id")
     if "users.manage" in perms:
         kind("access", "FROM access_requests WHERE status='pending' ORDER BY id", (),
              "SELECT id, full_name, created_at",
              lambda r: {"kind": "access", "severity": "info", "access_id": r["id"], "who_en": r["full_name"], "who_ar": r["full_name"],
-                        "date": r["created_at"][:10]})
+                        "date": r["created_at"][:10]},
+             "'access:' || id")
     week_ago = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
     kind("decided", "FROM asset_requests r JOIN employees e ON e.id=r.employee_id WHERE r.requested_by=? AND r.status IN ('fulfilled','rejected') "
          "AND r.decided_at >= ? ORDER BY r.decided_at DESC", (user["id"], week_ago),
          "SELECT r.id, r.status, r.decided_at, e.full_name_en, e.full_name_ar",
          lambda r: {"kind": "decided", "severity": "info", "request_id": r["id"], "status": r["status"], "who_en": r["full_name_en"],
-                    "who_ar": r["full_name_ar"], "date": r["decided_at"][:10]})
+                    "who_ar": r["full_name_ar"], "date": r["decided_at"][:10]},
+         "'decided:' || r.id")
     order = {"critical": 0, "warning": 1, "info": 2}
     items.sort(key=lambda x: (order[x["severity"]], x.get("date") or ""))
-    return {"total": sum(counts.values()), "counts": counts, "items": items[:limit]}
+    return {"total": sum(counts.values()), "counts": counts, "items": items[:limit], "hidden": hidden[0]}
+
+
+ALERT_KEY_RX = re.compile(r"(overdue|warranty|maintenance|request|access|decided):\d{1,12}(:[0-9-]{0,10})?")
+
+
+def dismiss_alerts(db, user, keys):
+    if not isinstance(keys, list) or not keys or len(keys) > 500 or \
+            not all(isinstance(k, str) and ALERT_KEY_RX.fullmatch(k) for k in keys):
+        raise ApiError(400, "bad_request", "Bad request")
+    with db.tx():
+        db.execute("DELETE FROM alert_dismissals WHERE user_id=? AND created_at < ?",            # tidy: forget very old ones
+                   (user["id"], (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=400)).strftime("%Y-%m-%dT%H:%M:%SZ")))
+        for k in set(keys):
+            db.execute("INSERT OR IGNORE INTO alert_dismissals(user_id, alert_key, created_at) VALUES (?,?,?)", (user["id"], k, now_iso()))
+
+
+def restore_alerts(db, user):
+    db.execute("DELETE FROM alert_dismissals WHERE user_id=?", (user["id"],))
 
 
 # ------------------------------------------------------------------ e-mail

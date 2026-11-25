@@ -411,6 +411,18 @@ def alerts_get(ctx):
     return notify.alerts(ctx.db, ctx.app.inst, ctx.user)
 
 
+@route("POST", "/api/alerts/dismiss")
+def alerts_dismiss(ctx):
+    notify.dismiss_alerts(ctx.db, ctx.user, ctx.json().get("keys"))
+    return notify.alerts(ctx.db, ctx.app.inst, ctx.user)
+
+
+@route("POST", "/api/alerts/restore")
+def alerts_restore(ctx):
+    notify.restore_alerts(ctx.db, ctx.user)
+    return notify.alerts(ctx.db, ctx.app.inst, ctx.user)
+
+
 @route("GET", "/api/settings", perm="company.view")
 def settings_get(ctx):
     return notify.get_settings(ctx.db, ctx.app.inst)
