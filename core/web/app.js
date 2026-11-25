@@ -418,10 +418,12 @@ function pageHead(title, sub, right = '') {
   $('#tophead').innerHTML = `<button class="chip" id="t-menu" aria-label="${t('nav.menu')}" aria-controls="side">${ic('list', 17)}</button><div style="min-width:0"><h1>${esc(title)}</h1>${sub ? `<p>${esc(sub)}</p>` : ''}</div><div class="sp"></div>${right}
   ${S.installEvt ? `<button class="chip" id="t-install" title="${t('pwa.install')}">${ic('download', 17)}<span class="hide-sm">${t('pwa.install')}</span></button>` : ''}
   ${has('assets.view') ? `<button class="chip" id="t-scan" title="${t('scan.button')}" aria-label="${t('scan.button')}">${ic('qr', 17)}<span class="hide-sm">${t('scan.button')}</span></button>` : ''}
+  <button class="chip" id="t-theme" title="${t('common.theme')}" aria-label="${t('common.theme')}">${ic(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon', 17)}</button>
   <div class="menu" id="bellwrap"><button class="chip" id="t-bell" title="${t('alert.title')}" aria-label="${t('alert.title')}">${ic('bell', 17)}<span class="bdg" id="bellc" hidden></span></button></div>
 `;
   $('#t-menu').onclick = () => $('.app').classList.toggle('navopen');
   $('#t-bell').onclick = openBell;
+  $('#t-theme').onclick = () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
   const sc = $('#t-scan'); if (sc) sc.onclick = openScanner;
   const inst = $('#t-install'); if (inst) inst.onclick = installApp;
   if (S.alerts) { const c = $('#bellc'); c.textContent = S.alerts.total > 99 ? '99+' : S.alerts.total; c.hidden = !S.alerts.total; }
