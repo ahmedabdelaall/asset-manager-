@@ -1183,5 +1183,6 @@
  "imp.add_people": "Add holders who are not employees in the system yet",
  "imp.add_people_hint": "Uses the holder's name and national ID from the sheet; the employee number continues your numbering. Holders are found by national ID first, then by employee number or name.",
  "imp.new_people": "{n} new employees will be added",
- "err.employee_nid_not_found": "No employee has this national ID. Tick “Add holders” or give the holder's name."
+ "err.employee_nid_not_found": "No employee has this national ID. Tick “Add holders” or give the holder's name.",
+ "dash.open_list": "Open the list"
 }

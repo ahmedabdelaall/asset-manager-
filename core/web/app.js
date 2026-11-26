@@ -462,24 +462,28 @@ async function pDashboard(el) {
   pageHead(t('dash.title'), t('dash.sub', { company: companyName() }));
   S.license = Object.assign(S.license || {}, { state: d.license.state, days_left: d.license.days_left, disabled: !!d.license.disabled });
   const lic = d.license, ok = lic.disabled || lic.state === 'valid' || lic.state === 'grace';
-  const kpi = (icon, num, label, sub, cls = '') => `<div class="card kpi ${cls}"><div class="ico">${ic(icon)}</div><div class="num ${String(num).length > 6 ? 'sm' : ''}">${num}</div><div class="lbl">${label}</div><div class="d">${sub}</div></div>`;
+  // a card is a link to its list (already filtered) when the user may open that page
+  const kpi = (icon, num, label, sub, cls = '', href = '', perm = undefined) => {
+    const inner = `<div class="ico">${ic(icon)}</div><div class="num ${String(num).length > 6 ? 'sm' : ''}">${num}</div><div class="lbl">${label}</div><div class="d">${sub}</div>`;
+    return href && canSee(perm) ? `<a class="card kpi link ${cls}" href="${href}" title="${esc(t('dash.open_list'))}">${inner}</a>` : `<div class="card kpi ${cls}">${inner}</div>`;
+  };
   const steps = [[ok, t('dash.step_license'), '#/license', has('license.view') && !lic.disabled], [!!S.brand.logo, t('dash.step_brand'), '#/company', has('company.view')], [d.users.total > 1, t('dash.step_users'), '#/users', has('users.view')],
   [!!d.last_backup, t('dash.step_backup'), '#/backups', has('backup.view')]];
   const A = d.assets;
   if (A) steps.push([A.categories > 0, t('dash.step_category'), '#/categories', has('categories.manage')], [A.employees > 0, t('dash.step_employee'), '#/employees', has('employees.manage')],
     [A.total > 0, t('dash.step_asset'), '#/assets', has('assets.manage')]);
   el.innerHTML = `${A ? `<div class="grid g4" style="margin-bottom:18px">
-  ${kpi('box', A.total, t('dash.assets'), t('dash.assets_sub', { n: A.categories }), 'main')}
-  ${kpi('swap', A.by_status.assigned, t('dash.assigned'), A.overdue ? `<span style="color:var(--bad);font-weight:700">${esc(t('dash.overdue', { n: A.overdue }))}</span>` : esc(t('dash.none_overdue')))}
-  ${kpi('check', A.by_status.in_stock, t('dash.in_stock'), esc(t('dash.maint', { n: A.by_status.maintenance })))}
-  ${kpi('idcard', A.employees, t('dash.employees'), esc(t('dash.value', { v: money(A.value) })) + (A.warranty_soon ? ' · ' + esc(t('dash.warranty_soon', { n: A.warranty_soon })) : ''))}</div>
+  ${kpi('box', A.total, t('dash.assets'), t('dash.assets_sub', { n: A.categories }), 'main', '#/assets?status=', 'assets.view')}
+  ${kpi('swap', A.by_status.assigned, t('dash.assigned'), A.overdue ? `<span style="color:var(--bad);font-weight:700">${esc(t('dash.overdue', { n: A.overdue }))}</span>` : esc(t('dash.none_overdue')), '', '#/assignments', 'assets.view')}
+  ${kpi('check', A.by_status.in_stock, t('dash.in_stock'), esc(t('dash.maint', { n: A.by_status.maintenance })), '', '#/assets?status=in_stock', 'assets.view')}
+  ${kpi('idcard', A.employees, t('dash.employees'), esc(t('dash.value', { v: money(A.value) })) + (A.warranty_soon ? ' · ' + esc(t('dash.warranty_soon', { n: A.warranty_soon })) : ''), '', '#/employees?status=active', 'employees.view')}</div>
   <div class="grid g12" id="dcharts" style="margin-bottom:18px"></div>` : ''}
   <div class="grid g4">
-  ${kpi('users', d.users.active, t('dash.active_users'), t('dash.of_total', { n: d.users.total }))}
-  ${kpi('shield', d.roles, t('dash.roles'), t('dash.roles_sub'))}
+  ${kpi('users', d.users.active, t('dash.active_users'), t('dash.of_total', { n: d.users.total }), '', '#/users', 'users.view')}
+  ${kpi('shield', d.roles, t('dash.roles'), t('dash.roles_sub'), '', '#/roles', 'roles.view')}
   ${lic.disabled ? kpi('check', esc('v' + d.version), t('dash.app_version'), t('dash.no_user_limit'))
-    : kpi('key', t('lic.state_' + lic.state), t('dash.license'), lic.expires_at ? t('dash.expires', { d: fmtDate(lic.expires_at) }) : t('dash.no_expiry'))}
-  ${kpi('db', d.last_backup ? fmtDate(new Date(d.last_backup.ts * 1000).toISOString(), true) : '—', t('dash.last_backup'), t('dash.schema', { v: d.schema, app: d.version }), A ? '' : 'main')}</div>
+    : kpi('key', t('lic.state_' + lic.state), t('dash.license'), lic.expires_at ? t('dash.expires', { d: fmtDate(lic.expires_at) }) : t('dash.no_expiry'), '', '#/license', 'license.view')}
+  ${kpi('db', d.last_backup ? fmtDate(new Date(d.last_backup.ts * 1000).toISOString(), true) : '—', t('dash.last_backup'), t('dash.schema', { v: d.schema, app: d.version }), A ? '' : 'main', '#/backups', 'backup.view')}</div>
   <div class="grid g12" style="margin-top:18px"><div class="card s7"><h3>${t('dash.recent')}</h3><div class="sub">${t('dash.recent_sub')}</div>${d.recent ? (d.recent.length ? `<div class="tscroll"><table class="tbl"><tbody>${d.recent.map(r => `<tr><td class="mono" style="white-space:nowrap">${esc(fmtDate(r.ts, true))}</td><td><b>${esc(r.username || '—')}</b></td><td>${esc(actionLabel(r.action))}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${t('common.none')}</div>`) : `<div class="empty">${t('dash.no_audit_perm')}</div>`}</div>
   <div class="card s5"><h3>${t('dash.getting_started')}</h3><div class="sub">${t('dash.getting_started_sub')}</div>${steps.map(([done, label, link, allowed]) => `<div class="chk"><div class="dotc ${done ? 'ok' : ''}">✓</div><div style="flex:1;${done ? 'color:var(--mut)' : 'font-weight:600'}">${esc(label)}</div>${!done && allowed ? `<a class="btn sm" href="${link}">${t('common.open')}</a>` : ''}</div>`).join('')}</div></div>`;
   S.dashAssets = A;
@@ -884,6 +888,8 @@ async function pAssets(el) {
   pageHead(t('assets.title'), t('assets.sub'), `<button class="btn sm" id="expa">${ic('download', 15)}${t('imp.export')}</button>` +
     (manage ? `<button class="btn sm" id="impa">${ic('sheet', 15)}${t('imp.import')}</button><button class="btn pri sm" id="adda">${ic('plus', 16)}${t('assets.add')}</button>` : ''));
   const cl = await cats(true);
+  const lq = new URLSearchParams(location.hash.split('?')[1] || '');
+  if (lq.has('status')) { AS.status = STATUSES.includes(lq.get('status')) ? lq.get('status') : ''; AS.q = ''; AS.category = ''; AS.page = 1; AS.sel.clear(); history.replaceState(null, '', '#/assets'); }
   el.innerHTML = `${!cl.length ? `<div class="banner warn">${ic('warn', 20)}<div class="grow"><b>${t('assets.no_categories')}</b>${t('assets.no_categories_sub')}</div>${has('categories.manage') ? `<a class="btn sm" href="#/categories">${t('nav.categories')}</a>` : ''}</div>` : ''}
   <div class="card"><div class="toolbar"><input class="inp" id="aq" style="max-width:300px" placeholder="${t('assets.search')}" value="${esc(AS.q)}">
   <select class="sel" id="ast"><option value="">${t('assets.all_status')}</option>${STATUSES.map(s => `<option value="${s}" ${AS.status === s ? 'selected' : ''}>${esc(t('st.' + s))}</option>`).join('')}</select>
@@ -1088,6 +1094,8 @@ async function pEmployees(el) {
   pageHead(t('emp.title'), t('emp.sub'), `<button class="btn sm" id="expe">${ic('download', 15)}${t('imp.export')}</button>` +
     (manage ? `<button class="btn sm" id="impe">${ic('sheet', 15)}${t('imp.import')}</button><button class="btn sm" id="depts">${ic('building', 15)}${t('emp.departments')}</button><button class="btn pri sm" id="adde">${ic('plus', 16)}${t('emp.add')}</button>` : ''));
   let depts = (await api('/api/departments')).departments;
+  const lq = new URLSearchParams(location.hash.split('?')[1] || '');
+  if (lq.has('status')) { EM.status = ['active', 'left', ''].includes(lq.get('status')) ? lq.get('status') : 'active'; EM.q = ''; EM.dept = ''; history.replaceState(null, '', '#/employees'); }
   const ES = { name: by(e => nameOf(e, 'full_name')), name_desc: by(e => nameOf(e, 'full_name'), true), emp_no: by(e => e.emp_no), department: by(e => e.dept_en ? nameOf(e, 'dept') : ''),
     holding: (a, b) => (b.holding || 0) - (a.holding || 0) || cmpText(nameOf(a, 'full_name'), nameOf(b, 'full_name')), newest: (a, b) => b.id - a.id };
   let esort = sortPref('employees', 'name', Object.keys(ES));
